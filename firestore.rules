@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.email == 'ggbank360@gmail.com';
+    }
+
+    function isValidProject() {
+      let data = request.resource.data;
+      return data.title is string && data.title.size() > 2 &&
+             data.abstract is string && data.abstract.size() > 20 &&
+             data.category is string;
+    }
+
+    function isValidBookingSubmission() {
+      let data = request.resource.data;
+      return data.customerName is string && data.customerName.size() > 1 &&
+             data.email is string && data.email.matches('.*@.*[.].*') &&
+             data.projectTitle is string && data.projectTitle.size() > 1 &&
+             data.projectAbstract is string && data.projectAbstract.size() >= 20 &&
+             // Ensure public submission cannot self-approve or inject adminNotes
+             data.status == 'Pending' &&
+             (!('adminNotes' in data) || data.adminNotes == '');
+    }
+
+    function isValidInquiry() {
+      let data = request.resource.data;
+      return data.name is string && data.name.size() > 1 &&
+             data.email is string && data.email.matches('.*@.*[.].*') &&
+             data.message is string && data.message.size() > 5;
+    }
+
+    // 1. Projects Collection
+    // Public can read published projects only. Admins can read all and write.
+    match /projects/{projectId} {
+      allow read: if (resource != null && resource.data.published == true) || isAdmin();
+      allow create: if isAdmin() && isValidProject();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 2. Bookings Collection
+    // Public can create booking requests with strict validation.
+    // Unauthenticated public CANNOT read, update, or delete any booking records!
+    // Only authenticated administrators have full read and update rights.
+    match /bookings/{bookingId} {
+      allow create: if isValidBookingSubmission();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 3. Inquiries Collection
+    // Public can submit contact messages. Only admins can read and manage.
+    match /inquiries/{inquiryId} {
+      allow create: if isValidInquiry();
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
