@@ -19,6 +19,8 @@ import {
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut, 
   onAuthStateChanged 
 } from 'firebase/auth';
@@ -68,6 +70,8 @@ export {
   onSnapshot,
   serverTimestamp,
   signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut, 
   onAuthStateChanged 
 };
