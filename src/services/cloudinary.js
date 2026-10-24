@@ -3,7 +3,7 @@
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'ggtechcore';
 const API_KEY = import.meta.env.VITE_CLOUDINARY_API_KEY || '834643876426437';
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ggtechcore';
 
 export const isCloudinaryConfigured = () => true;
 

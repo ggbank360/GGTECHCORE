@@ -25,8 +25,16 @@ export function App() {
   const [preselectedBookingProject, setPreselectedBookingProject] = useState(null);
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
 
-  // Auth state
-  const [adminUser, setAdminUser] = useState(null);
+  // Auth state with session persistence for Master Admin
+  const [adminUser, setAdminUser] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('gg_master_admin');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed to parse saved admin session:', e);
+    }
+    return null;
+  });
 
   // Load published projects
   const fetchPublishedProjects = async () => {
@@ -55,7 +63,11 @@ export function App() {
         if (user) {
           setAdminUser(user);
         } else {
-          setAdminUser(null);
+          // If logged in via master passcode session, maintain login
+          const savedMaster = sessionStorage.getItem('gg_master_admin');
+          if (!savedMaster) {
+            setAdminUser(null);
+          }
         }
       });
     }
@@ -89,6 +101,11 @@ export function App() {
   };
 
   const handleAdminLoginSuccess = (user) => {
+    try {
+      sessionStorage.setItem('gg_master_admin', JSON.stringify(user));
+    } catch (e) {
+      console.warn('Failed to save admin session:', e);
+    }
     setAdminUser(user);
     setIsAdminLoginModalOpen(false);
     setCurrentView('admin');
@@ -96,8 +113,13 @@ export function App() {
   };
 
   const handleAdminLogout = async () => {
+    try {
+      sessionStorage.removeItem('gg_master_admin');
+    } catch (e) {}
     if (isFirebaseConfigured() && auth) {
-      await signOut(auth);
+      try {
+        await signOut(auth);
+      } catch (e) {}
     }
     setAdminUser(null);
     setCurrentView('home');
