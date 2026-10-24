@@ -18,7 +18,9 @@ import {
   ShieldCheck,
   RefreshCw,
   Database,
-  Star
+  Star,
+  AlertTriangle,
+  CloudUpload
 } from 'lucide-react';
 import { 
   getAllProjects, 
@@ -26,7 +28,9 @@ import {
   updateProject, 
   deleteProject, 
   subscribeToProjects,
-  seedInitialProjectsToFirestore 
+  seedInitialProjectsToFirestore,
+  checkFirestoreAccess,
+  syncAllLocalProjectsToFirestore
 } from '../services/projectService';
 import { 
   getAllBookings, 
@@ -50,6 +54,8 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [seedingLoading, setSeedingLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+  const [firestoreStatus, setFirestoreStatus] = useState({ checked: false, ok: true, error: null });
+  const [syncingCloud, setSyncingCloud] = useState(false);
 
   // Project Editor Modal State
   const [editingProject, setEditingProject] = useState(null);
@@ -67,9 +73,38 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingFilterStatus, setBookingFilterStatus] = useState('ALL');
 
+  const checkCloudHealth = async () => {
+    try {
+      const res = await checkFirestoreAccess();
+      setFirestoreStatus({ checked: true, ok: res.ok, error: res.message });
+    } catch (e) {
+      setFirestoreStatus({ checked: true, ok: false, error: e.message });
+    }
+  };
+
+  const handleSyncAllToCloud = async () => {
+    try {
+      setSyncingCloud(true);
+      const count = await syncAllLocalProjectsToFirestore();
+      const testRes = await checkFirestoreAccess();
+      setFirestoreStatus({ checked: true, ok: testRes.ok, error: testRes.message });
+      if (testRes.ok) {
+        setActionMessage(`✅ All ${count} projects successfully synced to Google Firebase Cloud for all users!`);
+      } else {
+        setActionMessage(`⚠️ Firestore Cloud is still blocking access (${testRes.message}). Please publish the rules in Firebase Console first.`);
+      }
+    } catch (err) {
+      alert('Sync error: ' + err.message);
+    } finally {
+      setSyncingCloud(false);
+      loadData();
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
+      checkCloudHealth();
       const [projList, bookList, inqList, revList] = await Promise.all([
         getAllProjects(false),
         getAllBookings(),
@@ -213,11 +248,19 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
       };
 
       if (editingProject.id) {
-        await updateProject(editingProject.id, { ...parsedPayload, id: editingProject.id });
-        setActionMessage(`Project "${parsedPayload.title}" updated successfully and reflected across the website!`);
+        const res = await updateProject(editingProject.id, { ...parsedPayload, id: editingProject.id });
+        if (res && res.firestoreError) {
+          setActionMessage(`⚠️ Project saved to your browser, but could not sync to cloud: ${res.firestoreError}. Follow the steps at the top of the dashboard to publish rules in Firebase Console.`);
+        } else {
+          setActionMessage(`Project "${parsedPayload.title}" updated successfully and synced live to Firebase Cloud!`);
+        }
       } else {
-        await createProject(parsedPayload);
-        setActionMessage(`New project "${parsedPayload.title}" created and published!`);
+        const res = await createProject(parsedPayload);
+        if (res && res.firestoreError) {
+          setActionMessage(`⚠️ Project saved to your browser, but could not sync to cloud: ${res.firestoreError}. Follow the steps at the top of the dashboard to publish rules in Firebase Console.`);
+        } else {
+          setActionMessage(`New project "${parsedPayload.title}" created and synced live to Firebase Cloud!`);
+        }
       }
 
       setProjectSaving(false);
@@ -321,8 +364,9 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
               <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.05rem', color: '#0f172a', fontWeight: 800 }}>
                 Admin Command Center
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600 }}>
-                Connected: Firebase (ggbank-d6735)
+              <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: firestoreStatus.ok ? '#22c55e' : '#f59e0b', display: 'inline-block' }}></span>
+                <span>{firestoreStatus.ok ? 'Firebase Cloud Live Sync: Connected' : 'Firebase Cloud Sync: Blocked by Rules'}</span>
               </div>
             </div>
           </div>
@@ -357,6 +401,55 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
 
       {/* Main Admin Body */}
       <div className="container" style={{ marginTop: '2rem' }}>
+        {/* Firebase Cloud Sync Alert if rules are blocked */}
+        {firestoreStatus.checked && !firestoreStatus.ok && (
+          <div style={{
+            background: '#fff7ed',
+            border: '1.5px solid #fdba74',
+            borderRadius: '12px',
+            padding: '1.25rem 1.5rem',
+            marginBottom: '1.75rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '1rem',
+            boxShadow: '0 4px 12px rgba(234, 88, 12, 0.08)'
+          }}>
+            <AlertTriangle size={24} color="#ea580c" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ flex: 1, fontSize: '0.9rem', color: '#9a3412', lineHeight: 1.5 }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem', color: '#c2410c', marginBottom: '0.35rem' }}>
+                Firebase Cloud Sync is Blocked (Permission Denied)
+              </div>
+              <div>
+                Changes are currently saving <strong>only in this browser's local cache</strong>. To update data for <strong>all users and devices worldwide in real-time</strong>:
+              </div>
+              <ol style={{ margin: '0.65rem 0 0.85rem 1.25rem', padding: 0, fontWeight: 600 }}>
+                <li>Open <a href="https://console.firebase.google.com/project/ggbank-d6735/firestore/rules" target="_blank" rel="noreferrer" style={{ color: '#0284c7', textDecoration: 'underline' }}>Firebase Console &gt; Firestore &gt; Rules</a></li>
+                <li>Set rules to allow read/write: <code style={{ background: '#ffedd5', padding: '2px 6px', borderRadius: '4px', color: '#9a3412' }}>allow read, write: if true;</code></li>
+                <li>Click <strong>Publish</strong>.</li>
+              </ol>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                <button 
+                  onClick={handleSyncAllToCloud} 
+                  disabled={syncingCloud}
+                  className="btn btn-primary btn-sm" 
+                  style={{ background: '#ea580c', borderColor: '#c2410c', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  {syncingCloud ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
+                  <span>{syncingCloud ? 'Syncing to Cloud...' : 'Push All Local Projects to Cloud Now'}</span>
+                </button>
+                <button 
+                  onClick={checkCloudHealth} 
+                  className="btn btn-outline btn-sm"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <RefreshCw size={14} />
+                  <span>Test Cloud Connection Again</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Navigation Tabs */}
         <div style={{
           display: 'flex',

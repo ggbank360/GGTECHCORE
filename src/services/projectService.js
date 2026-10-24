@@ -175,6 +175,50 @@ export const getProjectById = async (id) => {
 };
 
 /**
+ * Check if Firebase Firestore is reachable and rules allow read/write
+ */
+export const checkFirestoreAccess = async () => {
+  if (!isFirebaseConfigured() || !db) {
+    return { ok: false, error: 'Firebase is not initialized or configured.' };
+  }
+  try {
+    const projectsRef = collection(db, 'projects');
+    await getDocs(query(projectsRef, orderBy('createdAt', 'desc')));
+    return { ok: true };
+  } catch (err) {
+    return { 
+      ok: false, 
+      code: err.code || 'permission-denied', 
+      message: err.message || 'Permission denied by Firestore rules.' 
+    };
+  }
+};
+
+/**
+ * Upload all projects currently saved in local storage to Firestore
+ */
+export const syncAllLocalProjectsToFirestore = async () => {
+  if (!isFirebaseConfigured() || !db) {
+    throw new Error('Firebase Firestore is not configured.');
+  }
+
+  const local = getLocalProjects();
+  if (local.length === 0) return 0;
+
+  let successCount = 0;
+  for (const proj of local) {
+    const docRef = doc(db, 'projects', proj.id);
+    await setDoc(docRef, {
+      ...proj,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    successCount++;
+  }
+
+  return successCount;
+};
+
+/**
  * Create a new engineering project (Admin)
  */
 export const createProject = async (projectData) => {
@@ -192,6 +236,9 @@ export const createProject = async (projectData) => {
   local.unshift(payload);
   saveLocalProjects(local);
 
+  let synced = false;
+  let firestoreError = null;
+
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'projects', newId);
@@ -200,13 +247,15 @@ export const createProject = async (projectData) => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      synced = true;
       console.info(`Project ${newId} saved to Firestore.`);
     } catch (error) {
+      firestoreError = error.message;
       console.warn('Firestore project create sync notice:', error.message);
     }
   }
 
-  return payload;
+  return { ...payload, synced, firestoreError };
 };
 
 /**
@@ -232,6 +281,9 @@ export const updateProject = async (id, updates) => {
   }
   saveLocalProjects(local);
 
+  let synced = false;
+  let firestoreError = null;
+
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'projects', id);
@@ -239,13 +291,15 @@ export const updateProject = async (id, updates) => {
         ...payload,
         updatedAt: serverTimestamp()
       }, { merge: true });
+      synced = true;
       console.info(`Project ${id} updated in Firestore.`);
     } catch (error) {
+      firestoreError = error.message;
       console.warn('Firestore project update sync notice:', error.message);
     }
   }
 
-  return updatedRecord;
+  return { ...updatedRecord, synced, firestoreError };
 };
 
 /**
