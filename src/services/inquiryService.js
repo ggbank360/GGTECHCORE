@@ -9,7 +9,8 @@ import {
   query, 
   orderBy, 
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp,
+  isPermissionDenied
 } from './firebase';
 
 const LOCAL_STORAGE_INQUIRIES_KEY = 'gg_techcore_inquiries_v1';
@@ -76,10 +77,14 @@ export const subscribeToInquiries = (callback) => {
           callback(list);
         }
       }, (err) => {
-        console.warn('Firestore inquiries onSnapshot note:', err.message);
+        if (!isPermissionDenied(err)) {
+          console.warn('Firestore inquiries onSnapshot note:', err.message);
+        }
       });
     } catch (e) {
-      console.warn('Could not attach Firestore onSnapshot for inquiries:', e.message);
+      if (!isPermissionDenied(e)) {
+        console.warn('Could not attach Firestore onSnapshot for inquiries:', e.message);
+      }
     }
   }
 
@@ -138,7 +143,9 @@ export const submitInquiry = async (inquiryData) => {
       });
       createdRecord = { id: docRef.id, ...payload };
     } catch (error) {
-      console.error('Failed to submit inquiry to Firestore:', error);
+      if (!isPermissionDenied(error)) {
+        console.warn('Failed to submit inquiry to Firestore:', error);
+      }
     }
   }
 
@@ -161,7 +168,9 @@ export const getAllInquiries = async () => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       if (list.length > 0) return list;
     } catch (error) {
-      console.warn('Firestore inquiries query failed, reading local store:', error);
+      if (!isPermissionDenied(error)) {
+        console.warn('Firestore inquiries query failed, reading local store:', error);
+      }
     }
   }
 

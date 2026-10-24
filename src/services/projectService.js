@@ -14,7 +14,8 @@ import {
   where, 
   orderBy, 
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp,
+  isPermissionDenied
 } from './firebase';
 import { initialProjects } from '../data/seedProjects';
 
@@ -84,10 +85,14 @@ export const subscribeToProjects = (callback) => {
           callback([]);
         }
       }, (err) => {
-        console.warn('Firestore onSnapshot project listener note:', err.message);
+        if (!isPermissionDenied(err)) {
+          console.warn('Firestore onSnapshot project listener note:', err.message);
+        }
       });
     } catch (e) {
-      console.warn('Could not attach Firestore onSnapshot for projects:', e.message);
+      if (!isPermissionDenied(e)) {
+        console.warn('Could not attach Firestore onSnapshot for projects:', e.message);
+      }
     }
   }
 
@@ -144,7 +149,9 @@ export const getAllProjects = async (publishedOnly = true) => {
       const local = getLocalProjects();
       return publishedOnly ? local.filter(p => p.published) : local;
     } catch (error) {
-      console.warn('Firestore fetch fallback to local cache:', error.message);
+      if (!isPermissionDenied(error)) {
+        console.warn('Firestore fetch fallback to local cache:', error.message);
+      }
       const local = getLocalProjects();
       return publishedOnly ? local.filter(p => p.published) : local;
     }
@@ -166,7 +173,9 @@ export const getProjectById = async (id) => {
         return { id: docSnap.id, ...docSnap.data() };
       }
     } catch (err) {
-      console.warn('Firestore getDoc check:', err.message);
+      if (!isPermissionDenied(err)) {
+        console.warn('Firestore getDoc check:', err.message);
+      }
     }
   }
 
@@ -251,7 +260,9 @@ export const createProject = async (projectData) => {
       console.info(`Project ${newId} saved to Firestore.`);
     } catch (error) {
       firestoreError = error.message;
-      console.warn('Firestore project create sync notice:', error.message);
+      if (!isPermissionDenied(error)) {
+        console.warn('Firestore project create sync notice:', error.message);
+      }
     }
   }
 
@@ -295,7 +306,9 @@ export const updateProject = async (id, updates) => {
       console.info(`Project ${id} updated in Firestore.`);
     } catch (error) {
       firestoreError = error.message;
-      console.warn('Firestore project update sync notice:', error.message);
+      if (!isPermissionDenied(error)) {
+        console.warn('Firestore project update sync notice:', error.message);
+      }
     }
   }
 
@@ -316,7 +329,9 @@ export const deleteProject = async (id) => {
       await deleteDoc(docRef);
       console.info(`Project ${id} deleted from Firestore.`);
     } catch (error) {
-      console.warn('Firestore project delete sync notice:', error.message);
+      if (!isPermissionDenied(error)) {
+        console.warn('Firestore project delete sync notice:', error.message);
+      }
     }
   }
 

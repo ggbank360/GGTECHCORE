@@ -56,6 +56,7 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
   const [actionMessage, setActionMessage] = useState('');
   const [firestoreStatus, setFirestoreStatus] = useState({ checked: false, ok: true, error: null });
   const [syncingCloud, setSyncingCloud] = useState(false);
+  const [dismissCloudNotice, setDismissCloudNotice] = useState(false);
 
   // Project Editor Modal State
   const [editingProject, setEditingProject] = useState(null);
@@ -402,7 +403,7 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
       {/* Main Admin Body */}
       <div className="container" style={{ marginTop: '2rem' }}>
         {/* Firebase Cloud Sync Alert if rules are blocked */}
-        {firestoreStatus.checked && !firestoreStatus.ok && (
+        {firestoreStatus.checked && !firestoreStatus.ok && !dismissCloudNotice && (
           <div style={{
             background: '#fff7ed',
             border: '1.5px solid #fdba74',
@@ -412,10 +413,11 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
             display: 'flex',
             alignItems: 'flex-start',
             gap: '1rem',
-            boxShadow: '0 4px 12px rgba(234, 88, 12, 0.08)'
+            boxShadow: '0 4px 12px rgba(234, 88, 12, 0.08)',
+            position: 'relative'
           }}>
             <AlertTriangle size={24} color="#ea580c" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ flex: 1, fontSize: '0.9rem', color: '#9a3412', lineHeight: 1.5 }}>
+            <div style={{ flex: 1, fontSize: '0.9rem', color: '#9a3412', lineHeight: 1.5, paddingRight: '1.5rem' }}>
               <div style={{ fontWeight: 800, fontSize: '1rem', color: '#c2410c', marginBottom: '0.35rem' }}>
                 Firebase Cloud Sync is Blocked (Permission Denied)
               </div>
@@ -447,6 +449,23 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
                 </button>
               </div>
             </div>
+            <button
+              onClick={() => setDismissCloudNotice(true)}
+              title="Dismiss Notice"
+              style={{
+                position: 'absolute',
+                top: '0.85rem',
+                right: '0.85rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#ea580c',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px'
+              }}
+            >
+              <X size={18} />
+            </button>
           </div>
         )}
 

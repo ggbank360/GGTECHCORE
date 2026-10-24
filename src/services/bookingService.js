@@ -12,7 +12,8 @@ import {
   query, 
   orderBy, 
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp,
+  isPermissionDenied
 } from './firebase';
 
 const LOCAL_STORAGE_BOOKINGS_KEY = 'gg_techcore_bookings_v1';
@@ -125,10 +126,14 @@ export const subscribeToBookings = (callback) => {
           callback(list);
         }
       }, (err) => {
-        console.warn('Firestore bookings onSnapshot note:', err.message);
+        if (!isPermissionDenied(err)) {
+          console.warn('Firestore bookings onSnapshot note:', err.message);
+        }
       });
     } catch (e) {
-      console.warn('Could not attach Firestore onSnapshot for bookings:', e.message);
+      if (!isPermissionDenied(e)) {
+        console.warn('Could not attach Firestore onSnapshot for bookings:', e.message);
+      }
     }
   }
 
@@ -239,7 +244,9 @@ export const submitBooking = async (bookingData) => {
       });
       createdRecord = { id: docRef.id, ...payload };
     } catch (error) {
-      console.error('Failed to submit booking to Firestore:', error);
+      if (!isPermissionDenied(error)) {
+        console.warn('Failed to submit booking to Firestore:', error);
+      }
     }
   }
 
@@ -266,7 +273,9 @@ export const getAllBookings = async () => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       if (list.length > 0) return list;
     } catch (error) {
-      console.warn('Firestore bookings query failed, reading local store:', error);
+      if (!isPermissionDenied(error)) {
+        console.warn('Firestore bookings query failed, reading local store:', error);
+      }
     }
   }
 

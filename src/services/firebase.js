@@ -43,13 +43,25 @@ let app = null;
 let db = null;
 let auth = null;
 
+export const isPermissionDenied = (err) => {
+  if (!err) return false;
+  const msg = err.message || '';
+  const code = err.code || '';
+  return code === 'permission-denied' || 
+         msg.includes('insufficient permissions') || 
+         msg.includes('Permission denied') ||
+         code === 'auth/admin-restricted-operation';
+};
+
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   db = getFirestore(app);
   auth = getAuth(app);
   console.info('🚀 GG TECHCORE: Connected to Firebase (ggbank-d6735) Firestore & Auth.');
 } catch (error) {
-  console.warn('⚠️ Firebase init warning:', error);
+  if (!isPermissionDenied(error)) {
+    console.warn('⚠️ Firebase init warning:', error);
+  }
 }
 
 export { 

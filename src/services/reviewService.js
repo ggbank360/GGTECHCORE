@@ -10,7 +10,8 @@ import {
   query, 
   orderBy, 
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp,
+  isPermissionDenied
 } from './firebase';
 
 const LOCAL_STORAGE_REVIEWS_KEY = 'gg_techcore_reviews_v1';
@@ -107,10 +108,14 @@ export const subscribeToReviews = (callback) => {
           callback(list);
         }
       }, (err) => {
-        console.warn('Firestore reviews onSnapshot note:', err.message);
+        if (!isPermissionDenied(err)) {
+          console.warn('Firestore reviews onSnapshot note:', err.message);
+        }
       });
     } catch (e) {
-      console.warn('Could not attach Firestore onSnapshot for reviews:', e.message);
+      if (!isPermissionDenied(e)) {
+        console.warn('Could not attach Firestore onSnapshot for reviews:', e.message);
+      }
     }
   }
 
@@ -151,7 +156,9 @@ export const getAllReviews = async () => {
         return list;
       }
     } catch (e) {
-      console.warn('Firestore reviews fetch note:', e.message);
+      if (!isPermissionDenied(e)) {
+        console.warn('Firestore reviews fetch note:', e.message);
+      }
     }
   }
   return getLocalReviews();
@@ -186,7 +193,9 @@ export const submitReview = async (reviewData) => {
         createdAt: serverTimestamp()
       });
     } catch (err) {
-      console.warn('Firestore review save note:', err.message);
+      if (!isPermissionDenied(err)) {
+        console.warn('Firestore review save note:', err.message);
+      }
     }
   }
 
@@ -203,7 +212,9 @@ export const deleteReview = async (id) => {
       const docRef = doc(db, 'reviews', id);
       await deleteDoc(docRef);
     } catch (err) {
-      console.warn('Firestore review delete note:', err.message);
+      if (!isPermissionDenied(err)) {
+        console.warn('Firestore review delete note:', err.message);
+      }
     }
   }
   return true;
