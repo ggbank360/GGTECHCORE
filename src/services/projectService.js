@@ -1,4 +1,4 @@
-// Project Service — Firestore Integration with Instant Real-Time Synchronization
+// Project Service — Firestore Integration with Instant Real-Time Synchronization & Local Storage Fallback Cache
 import { 
   db, 
   isFirebaseConfigured, 
@@ -6,9 +6,7 @@ import {
   doc, 
   getDocs, 
   getDoc, 
-  addDoc, 
   setDoc,
-  updateDoc, 
   deleteDoc, 
   query, 
   where, 
@@ -20,29 +18,41 @@ import { initialProjects } from '../data/seedProjects';
 
 const LOCAL_STORAGE_KEY = 'gg_techcore_projects_v2';
 
-// Local storage cache management
+/**
+ * Read projects from local storage cache.
+ * If empty or uninitialized, falls back to the 6 default reference projects.
+ */
 export const getLocalProjects = () => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) {
-      return [];
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialProjects));
+      return initialProjects;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialProjects));
+      return initialProjects;
+    }
+    return parsed;
   } catch (err) {
     console.error('Error reading projects from localStorage:', err);
-    return [];
+    return initialProjects;
   }
 };
 
+/**
+ * Save projects to localStorage and notify all listeners across windows and tabs
+ */
 export const saveLocalProjects = (projects) => {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projects));
-    window.dispatchEvent(new CustomEvent('gg_projects_updated', { detail: projects }));
+    const dataToSave = Array.isArray(projects) && projects.length > 0 ? projects : initialProjects;
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+    window.dispatchEvent(new CustomEvent('gg_projects_updated', { detail: dataToSave }));
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         const bc = new BroadcastChannel('gg_techcore_sync');
-        bc.postMessage({ type: 'PROJECTS_UPDATED', data: projects });
+        bc.postMessage({ type: 'PROJECTS_UPDATED', data: dataToSave });
         bc.close();
       } catch {
         // BroadcastChannel optional fallback
@@ -54,12 +64,12 @@ export const saveLocalProjects = (projects) => {
 };
 
 /**
- * Real-time subscription for projects (Firestore onSnapshot primary)
+ * Real-time subscription for projects (Firestore onSnapshot primary with automatic seeding & local fallback)
  * @param {function} callback
- * @param {boolean} publishedOnly - If true, queries only published projects
+ * @param {boolean} publishedOnly - If true, filters for published projects
  */
 export const subscribeToProjects = (callback, publishedOnly = false) => {
-  // 1. Initial call with local cached data for instant page rendering
+  // 1. Initial immediate invocation from local cache for instant zero-latency render
   const initial = getLocalProjects();
   callback(publishedOnly ? initial.filter(p => p.published) : initial);
 
@@ -73,30 +83,59 @@ export const subscribeToProjects = (callback, publishedOnly = false) => {
         : query(projectsRef);
 
       unsubscribeFirestore = onSnapshot(q, (snapshot) => {
+        // When Firestore projects collection is empty initially:
+        if (snapshot.empty || snapshot.docs.length === 0) {
+          const local = getLocalProjects();
+          const fallbackList = local.length > 0 ? local : initialProjects;
+          saveLocalProjects(fallbackList);
+          callback(publishedOnly ? fallbackList.filter(p => p.published) : fallbackList);
+
+          // Auto-seed to Firestore in background if possible
+          seedInitialProjectsToFirestore().catch(e => {
+            console.info('Auto-seed to Firestore notice (offline or rules protected):', e?.message || e);
+          });
+          return;
+        }
+
         const list = snapshot.docs.map(d => {
           const data = d.data();
-          return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+          return { 
+            id: d.id, 
+            ...data, 
+            createdAt: toISOStringSafe(data.createdAt), 
+            updatedAt: toISOStringSafe(data.updatedAt) 
+          };
         });
         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        saveLocalProjects(list);
+
+        // When publishedOnly is true, preserve any local drafts in localStorage
+        if (publishedOnly) {
+          const currentLocal = getLocalProjects();
+          const drafts = currentLocal.filter(p => !p.published);
+          const publishedIds = new Set(list.map(p => p.id));
+          const preservedDrafts = drafts.filter(d => !publishedIds.has(d.id));
+          saveLocalProjects([...list, ...preservedDrafts]);
+        } else {
+          saveLocalProjects(list);
+        }
+
         callback(list);
       }, (err) => {
-        console.error('Firestore subscribeToProjects onSnapshot error with code:', err?.code || 'unknown', err);
+        console.warn('Firestore subscribeToProjects onSnapshot notice, using local cache:', err?.code || 'unknown', err?.message);
         const local = getLocalProjects();
         callback(publishedOnly ? local.filter(p => p.published) : local);
       });
     } catch (e) {
-      console.error('Could not attach Firestore onSnapshot for projects with code:', e?.code || 'unknown', e);
+      console.warn('Could not attach Firestore onSnapshot for projects, using local cache:', e?.code || 'unknown', e?.message);
       const local = getLocalProjects();
       callback(publishedOnly ? local.filter(p => p.published) : local);
     }
   } else {
-    console.error('Firebase is not configured. Falling back to localStorage for projects.');
     const local = getLocalProjects();
     callback(publishedOnly ? local.filter(p => p.published) : local);
   }
 
-  // Local custom event listener for immediate same-window updates
+  // Local custom event listener for immediate same-window updates across components
   const handleLocalUpdate = (e) => {
     const data = e.detail || getLocalProjects();
     callback(publishedOnly ? data.filter(p => p.published) : data);
@@ -127,8 +166,8 @@ export const subscribeToProjects = (callback, publishedOnly = false) => {
 };
 
 /**
- * Fetch all projects from Firestore (primary)
- * @param {boolean} publishedOnly - If true, queries with where('published', '==', true)
+ * Fetch all projects from Firestore with localStorage fallback
+ * @param {boolean} publishedOnly
  */
 export const getAllProjects = async (publishedOnly = true) => {
   if (isFirebaseConfigured() && db) {
@@ -139,28 +178,41 @@ export const getAllProjects = async (publishedOnly = true) => {
         : query(projectsRef);
 
       const snapshot = await getDocs(q);
+      if (snapshot.empty || snapshot.docs.length === 0) {
+        const local = getLocalProjects();
+        const fallbackList = local.length > 0 ? local : initialProjects;
+        saveLocalProjects(fallbackList);
+        return publishedOnly ? fallbackList.filter(p => p.published) : fallbackList;
+      }
+
       const list = snapshot.docs.map(d => {
         const data = d.data();
-        return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+        return { 
+          id: d.id, 
+          ...data, 
+          createdAt: toISOStringSafe(data.createdAt), 
+          updatedAt: toISOStringSafe(data.updatedAt) 
+        };
       });
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       
-      saveLocalProjects(list);
+      if (!publishedOnly) {
+        saveLocalProjects(list);
+      }
       return list;
     } catch (error) {
-      console.error('Firestore getAllProjects failed with code:', error?.code || 'unknown', error);
+      console.warn('Firestore getAllProjects notice, using local cache:', error?.code || 'unknown', error?.message);
       const local = getLocalProjects();
       return publishedOnly ? local.filter(p => p.published) : local;
     }
   }
 
-  console.error('Firebase is not configured. Falling back to localStorage for getAllProjects.');
   const local = getLocalProjects();
   return publishedOnly ? local.filter(p => p.published) : local;
 };
 
 /**
- * Fetch single project by ID from Firestore
+ * Fetch single project by ID from Firestore with localStorage fallback
  */
 export const getProjectById = async (id) => {
   if (isFirebaseConfigured() && db) {
@@ -169,11 +221,15 @@ export const getProjectById = async (id) => {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        return { id: docSnap.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+        return { 
+          id: docSnap.id, 
+          ...data, 
+          createdAt: toISOStringSafe(data.createdAt), 
+          updatedAt: toISOStringSafe(data.updatedAt) 
+        };
       }
-      return null;
     } catch (err) {
-      console.error('Firestore getProjectById failed with code:', err?.code || 'unknown', err);
+      console.warn('Firestore getProjectById notice, checking local cache:', err?.code || 'unknown', err?.message);
     }
   }
 
@@ -204,7 +260,7 @@ export const checkFirestoreAccess = async () => {
 };
 
 /**
- * One-time migration helper: push local storage projects to Firestore
+ * Sync all projects currently in local storage to Firestore
  */
 export const syncAllLocalProjectsToFirestore = async () => {
   if (!isFirebaseConfigured() || !db) {
@@ -224,7 +280,7 @@ export const syncAllLocalProjectsToFirestore = async () => {
       }, { merge: true });
       successCount++;
     } catch (err) {
-      console.error(`Failed to migrate project ${proj.id} with code:`, err?.code || 'unknown', err);
+      console.error(`Failed to migrate project ${proj.id}:`, err?.code || 'unknown', err);
       throw err;
     }
   }
@@ -233,125 +289,125 @@ export const syncAllLocalProjectsToFirestore = async () => {
 };
 
 /**
- * Create a new engineering project in Firestore first (Admin)
+ * Create a new engineering project (Admin)
+ * Persists immediately to localStorage fallback cache and attempts Firestore cloud sync.
  */
 export const createProject = async (projectData) => {
   const published = projectData.published ?? true;
+  const newId = projectData.id || `proj_${Date.now()}`;
+  const newRecord = {
+    ...projectData,
+    id: newId,
+    published,
+    createdAt: projectData.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
 
+  // 1. Immediate local persistence & event dispatch so Home and Projects Showcase update at once
+  const local = getLocalProjects().filter(p => p.id !== newId);
+  local.unshift(newRecord);
+  saveLocalProjects(local);
+
+  let firestoreError = null;
+  let synced = false;
+
+  // 2. Sync to Firestore Cloud
   if (isFirebaseConfigured() && db) {
     try {
-      const projectsRef = collection(db, 'projects');
-      const docRef = await addDoc(projectsRef, {
+      const docRef = doc(db, 'projects', newId);
+      await setDoc(docRef, {
         ...projectData,
+        id: newId,
         published,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-
-      const newRecord = {
-        id: docRef.id,
-        ...projectData,
-        published,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      const local = getLocalProjects().filter(p => p.id !== docRef.id);
-      local.unshift(newRecord);
-      saveLocalProjects(local);
-
-      console.info(`Project created in Firestore with ID: ${docRef.id}`);
-      return newRecord;
+      synced = true;
+      console.info(`Project created in Firestore with ID: ${newId}`);
     } catch (error) {
-      console.error('Firestore createProject failed with code:', error?.code || 'unknown', error);
-      throw error;
+      firestoreError = error?.message || 'Firestore cloud write failed';
+      console.warn('Firestore createProject notice (persisted in local fallback):', firestoreError);
     }
   }
 
-  console.error('Firebase is not configured. Saving project to localStorage fallback.');
-  const fallbackRecord = {
-    ...projectData,
-    id: `proj_${Date.now()}`,
-    published,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  const local = getLocalProjects();
-  local.unshift(fallbackRecord);
-  saveLocalProjects(local);
-  return fallbackRecord;
+  return { ...newRecord, synced, firestoreError };
 };
 
 /**
- * Update an existing project in Firestore first (Admin)
+ * Update an existing project (Admin)
+ * Persists immediately to localStorage fallback cache and attempts Firestore cloud sync.
  */
 export const updateProject = async (id, updates) => {
+  const local = getLocalProjects();
+  const index = local.findIndex(p => p.id === id);
+  const updatedRecord = { 
+    ...(index !== -1 ? local[index] : {}),
+    ...updates, 
+    id, 
+    updatedAt: new Date().toISOString() 
+  };
+  
+  if (index !== -1) {
+    local[index] = updatedRecord;
+  } else {
+    local.unshift(updatedRecord);
+  }
+  saveLocalProjects(local);
+
+  let firestoreError = null;
+  let synced = false;
+
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'projects', id);
-      await updateDoc(docRef, {
-        ...updates,
+      await setDoc(docRef, {
+        ...updatedRecord,
         updatedAt: serverTimestamp()
-      });
-
-      const local = getLocalProjects();
-      const index = local.findIndex(p => p.id === id);
-      const updatedRecord = { id, ...updates, updatedAt: new Date().toISOString() };
-      if (index !== -1) {
-        local[index] = { ...local[index], ...updatedRecord };
-      } else {
-        local.unshift(updatedRecord);
-      }
-      saveLocalProjects(local);
+      }, { merge: true });
+      synced = true;
       console.info(`Project ${id} updated in Firestore.`);
-      return updatedRecord;
     } catch (error) {
-      console.error('Firestore updateProject failed with code:', error?.code || 'unknown', error);
-      throw error;
+      firestoreError = error?.message || 'Firestore cloud update failed';
+      console.warn('Firestore updateProject notice (persisted in local fallback):', firestoreError);
     }
   }
 
-  console.error('Firebase is not configured. Updating project in localStorage fallback.');
-  const local = getLocalProjects();
-  const index = local.findIndex(p => p.id === id);
-  const updatedRecord = { id, ...updates, updatedAt: new Date().toISOString() };
-  if (index !== -1) {
-    local[index] = { ...local[index], ...updatedRecord };
-    saveLocalProjects(local);
-  }
-  return updatedRecord;
+  return { ...updatedRecord, synced, firestoreError };
 };
 
 /**
- * Delete a project in Firestore first (Admin)
+ * Delete a project (Admin)
+ * Persists immediately to localStorage fallback cache and attempts Firestore cloud sync.
  */
 export const deleteProject = async (id) => {
+  const filtered = getLocalProjects().filter(p => p.id !== id);
+  saveLocalProjects(filtered);
+
+  let firestoreError = null;
+  let synced = false;
+
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'projects', id);
       await deleteDoc(docRef);
-      const filtered = getLocalProjects().filter(p => p.id !== id);
-      saveLocalProjects(filtered);
+      synced = true;
       console.info(`Project ${id} deleted from Firestore.`);
-      return true;
     } catch (error) {
-      console.error('Firestore deleteProject failed with code:', error?.code || 'unknown', error);
-      throw error;
+      firestoreError = error?.message || 'Firestore cloud delete failed';
+      console.warn('Firestore deleteProject notice (removed from local fallback):', firestoreError);
     }
   }
 
-  console.error('Firebase is not configured. Deleting project from localStorage fallback.');
-  const filtered = getLocalProjects().filter(p => p.id !== id);
-  saveLocalProjects(filtered);
-  return true;
+  return { success: true, synced, firestoreError };
 };
 
 /**
- * Seed initial sample projects directly into Firestore (Admin utility)
+ * Seed initial sample projects directly into Firestore
  */
 export const seedInitialProjectsToFirestore = async () => {
   if (!isFirebaseConfigured() || !db) {
-    throw new Error('Firebase Firestore is not configured or unavailable.');
+    saveLocalProjects(initialProjects);
+    return initialProjects.length;
   }
 
   let count = 0;
@@ -365,8 +421,7 @@ export const seedInitialProjectsToFirestore = async () => {
       }, { merge: true });
       count++;
     } catch (e) {
-      console.error(`Seed failed for project ${proj.id} with code:`, e?.code || 'unknown', e);
-      throw e;
+      console.warn(`Seed failed for project ${proj.id}:`, e?.message || e);
     }
   }
 

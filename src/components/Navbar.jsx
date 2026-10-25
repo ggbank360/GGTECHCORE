@@ -16,14 +16,24 @@ export const Navbar = ({ currentView, setCurrentView, onOpenAdmin, onOpenBooking
   const handleNavClick = (viewId) => {
     if (viewId === 'reviews') {
       setMobileMenuOpen(false);
-      if (currentView === 'home') {
+      const scrollToReviews = (attempts = 15) => {
         const el = document.getElementById('reviews-section');
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        if (el) {
+          const headerHeight = 94;
+          const rect = el.getBoundingClientRect();
+          const targetY = window.pageYOffset + rect.top - headerHeight;
+          window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+        } else if (attempts > 0) {
+          setTimeout(() => scrollToReviews(attempts - 1), 60);
+        }
+      };
+
+      if (currentView === 'home') {
+        scrollToReviews();
       } else {
         setCurrentView('home');
         setTimeout(() => {
-          const el = document.getElementById('reviews-section');
-          if (el) el.scrollIntoView({ behavior: 'smooth' });
+          scrollToReviews();
         }, 120);
       }
       return;

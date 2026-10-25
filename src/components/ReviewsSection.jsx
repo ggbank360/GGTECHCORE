@@ -21,7 +21,7 @@ export const ReviewsSection = ({ onOpenReviewModal }) => {
     : '5.0';
 
   return (
-    <section style={{ padding: '5rem 0', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }} id="reviews-section">
+    <section style={{ padding: '5rem 0', background: '#f8fafc', borderTop: '1px solid #e2e8f0', scrollMarginTop: '100px' }} id="reviews-section">
       <div className="container">
         {/* Header */}
         <div style={{

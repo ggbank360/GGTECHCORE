@@ -79,10 +79,18 @@ export const Footer = ({ onNavigate, onOpenAdmin }) => {
                 <a href="#reviews" onClick={(e) => {
                   e.preventDefault();
                   onNavigate('home');
-                  setTimeout(() => {
+                  const scrollToReviews = (attempts = 15) => {
                     const el = document.getElementById('reviews-section');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }, 120);
+                    if (el) {
+                      const headerHeight = 94;
+                      const rect = el.getBoundingClientRect();
+                      const targetY = window.pageYOffset + rect.top - headerHeight;
+                      window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+                    } else if (attempts > 0) {
+                      setTimeout(() => scrollToReviews(attempts - 1), 60);
+                    }
+                  };
+                  setTimeout(scrollToReviews, 80);
                 }} style={{ color: '#0284c7', fontWeight: 700 }}>
                   ★ Engineering Reviews & Ratings
                 </a>

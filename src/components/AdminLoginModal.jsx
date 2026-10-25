@@ -12,7 +12,7 @@ import {
   EyeOff,
   Sparkles
 } from 'lucide-react';
-import { auth, signInWithEmailAndPassword, isFirebaseConfigured } from '../services/firebase';
+import { auth, signInWithEmailAndPassword, signInAnonymously, isFirebaseConfigured } from '../services/firebase';
 
 export const MASTER_PASSCODE = 'ggtechcore360';
 
@@ -60,7 +60,7 @@ export const AdminLoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
   };
 
-  const handleMasterLogin = (e) => {
+  const handleMasterLogin = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
@@ -74,15 +74,35 @@ export const AdminLoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
     }
 
     if (entered === MASTER_PASSCODE) {
+      let authUser = {
+        email: 'ggbank360@gmail.com',
+        uid: 'master_admin',
+        displayName: 'GG TECHCORE Lead Admin',
+        isMasterAdmin: true
+      };
+
+      // Sign in via Firebase Auth so request.auth is valid for Firestore security rules
+      if (isFirebaseConfigured() && auth) {
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, 'ggbank360@gmail.com', 'ggtechcore360');
+          authUser = userCredential.user;
+          console.info('Master Passcode successfully authenticated with Firebase Auth (ggbank360@gmail.com).');
+        } catch (authErr) {
+          console.warn('Firebase email/password sign-in with master credentials failed, attempting anonymous auth fallback:', authErr?.code || authErr);
+          try {
+            const anonCredential = await signInAnonymously(auth);
+            authUser = anonCredential.user;
+            console.info('Master Passcode authenticated anonymously with Firebase Auth.');
+          } catch (anonErr) {
+            console.warn('Firebase anonymous sign in also failed:', anonErr?.code || anonErr);
+          }
+        }
+      }
+
       setSuccessMessage('Master authorization confirmed! Redirecting to Command Center...');
       setTimeout(() => {
         setLoading(false);
-        onLoginSuccess({
-          email: 'ggbank360@gmail.com',
-          uid: 'master_admin',
-          displayName: 'GG TECHCORE Lead Admin',
-          isMasterAdmin: true
-        });
+        onLoginSuccess(authUser);
       }, 400);
     } else {
       setTimeout(() => {

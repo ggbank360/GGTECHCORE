@@ -19,6 +19,7 @@ import {
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
+  signInAnonymously,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut, 
@@ -115,6 +116,7 @@ export {
   onSnapshot,
   serverTimestamp,
   signInWithEmailAndPassword, 
+  signInAnonymously,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut, 
