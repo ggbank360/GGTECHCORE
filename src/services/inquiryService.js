@@ -61,6 +61,9 @@ export const saveLocalInquiries = (inquiries) => {
  * Real-time subscription for inquiries (Firestore primary)
  */
 export const subscribeToInquiries = (callback) => {
+  const initial = getLocalInquiries();
+  callback(initial);
+
   let unsubscribeFirestore = null;
 
   if (isFirebaseConfigured() && db) {

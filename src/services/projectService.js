@@ -58,6 +58,10 @@ export const saveLocalProjects = (projects) => {
  * @param {boolean} publishedOnly - If true, queries only published projects
  */
 export const subscribeToProjects = (callback, publishedOnly = false) => {
+  // 1. Initial call with local cached data for instant page rendering
+  const initial = getLocalProjects();
+  callback(publishedOnly ? initial.filter(p => p.published) : initial);
+
   let unsubscribeFirestore = null;
 
   if (isFirebaseConfigured() && db) {

@@ -108,6 +108,9 @@ export const saveLocalBookings = (bookings) => {
  * Real-time subscription for customer project idea submissions (Firestore primary)
  */
 export const subscribeToBookings = (callback) => {
+  const initial = getLocalBookings();
+  callback(initial);
+
   let unsubscribeFirestore = null;
 
   if (isFirebaseConfigured() && db) {

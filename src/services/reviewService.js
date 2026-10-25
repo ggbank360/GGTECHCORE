@@ -91,6 +91,9 @@ export const saveLocalReviews = (reviews) => {
  * Real-time subscription for customer reviews (Firestore primary)
  */
 export const subscribeToReviews = (callback) => {
+  const initial = getLocalReviews();
+  callback(initial);
+
   let unsubscribeFirestore = null;
 
   if (isFirebaseConfigured() && db) {
