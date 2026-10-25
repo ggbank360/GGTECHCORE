@@ -17,7 +17,7 @@ export function App() {
   const [currentView, setCurrentView] = useState('home'); // 'home' | 'projects' | 'detail' | 'booking' | 'contact' | 'admin'
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   // Modals
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -30,8 +30,8 @@ export function App() {
     try {
       const saved = sessionStorage.getItem('gg_master_admin');
       if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Failed to parse saved admin session:', e);
+    } catch {
+      console.warn('Failed to parse saved admin session');
     }
     return null;
   });
@@ -50,11 +50,11 @@ export function App() {
   };
 
   useEffect(() => {
-    // 1. Real-time engineering projects subscription
+    // 1. Real-time engineering projects subscription (published projects only for public view)
     const unsubProjects = subscribeToProjects((list) => {
-      setProjects(list.filter(p => p.published));
+      setProjects(list);
       setLoading(false);
-    });
+    }, true);
 
     // 2. Listen to Firebase Auth state if configured
     let unsubAuth = null;
@@ -103,8 +103,8 @@ export function App() {
   const handleAdminLoginSuccess = (user) => {
     try {
       sessionStorage.setItem('gg_master_admin', JSON.stringify(user));
-    } catch (e) {
-      console.warn('Failed to save admin session:', e);
+    } catch {
+      console.warn('Failed to save admin session');
     }
     setAdminUser(user);
     setIsAdminLoginModalOpen(false);
@@ -115,11 +115,11 @@ export function App() {
   const handleAdminLogout = async () => {
     try {
       sessionStorage.removeItem('gg_master_admin');
-    } catch (e) {}
+    } catch {}
     if (isFirebaseConfigured() && auth) {
       try {
         await signOut(auth);
-      } catch (e) {}
+      } catch {}
     }
     setAdminUser(null);
     setCurrentView('home');

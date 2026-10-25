@@ -5,20 +5,16 @@ import {
   collection, 
   doc, 
   getDocs, 
-  getDoc, 
   addDoc, 
   updateDoc, 
   deleteDoc, 
-  query, 
-  orderBy, 
   onSnapshot,
-  serverTimestamp,
-  isPermissionDenied
+  serverTimestamp
 } from './firebase';
 
 const LOCAL_STORAGE_BOOKINGS_KEY = 'gg_techcore_bookings_v1';
 
-// Initial sample bookings for demonstration
+// Initial sample bookings for demonstration fallback
 const sampleBookings = [
   {
     id: "book_sample_01",
@@ -76,14 +72,14 @@ const sampleBookings = [
   }
 ];
 
-const getLocalBookings = () => {
+export const getLocalBookings = () => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_BOOKINGS_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_BOOKINGS_KEY, JSON.stringify(sampleBookings));
       return sampleBookings;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : sampleBookings;
   } catch (err) {
     console.error('Error reading bookings from localStorage:', err);
     return sampleBookings;
@@ -99,7 +95,9 @@ export const saveLocalBookings = (bookings) => {
         const bc = new BroadcastChannel('gg_techcore_sync');
         bc.postMessage({ type: 'BOOKINGS_UPDATED', data: bookings });
         bc.close();
-      } catch (e) {}
+      } catch {
+        // Optional multi-tab broadcast
+      }
     }
   } catch (err) {
     console.error('Error saving bookings to localStorage:', err);
@@ -107,34 +105,30 @@ export const saveLocalBookings = (bookings) => {
 };
 
 /**
- * Real-time subscription for customer project idea submissions
+ * Real-time subscription for customer project idea submissions (Firestore primary)
  */
 export const subscribeToBookings = (callback) => {
-  const initial = getLocalBookings();
-  callback(initial);
-
   let unsubscribeFirestore = null;
 
   if (isFirebaseConfigured() && db) {
     try {
       const bookingsRef = collection(db, 'bookings');
-      const q = query(bookingsRef, orderBy('createdAt', 'desc'));
-      unsubscribeFirestore = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          localStorage.setItem(LOCAL_STORAGE_BOOKINGS_KEY, JSON.stringify(list));
-          callback(list);
-        }
+      unsubscribeFirestore = onSnapshot(bookingsRef, (snapshot) => {
+        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        saveLocalBookings(list);
+        callback(list);
       }, (err) => {
-        if (!isPermissionDenied(err)) {
-          console.warn('Firestore bookings onSnapshot note:', err.message);
-        }
+        console.error('Firestore bookings onSnapshot error with code:', err?.code || 'unknown', err);
+        callback(getLocalBookings());
       });
     } catch (e) {
-      if (!isPermissionDenied(e)) {
-        console.warn('Could not attach Firestore onSnapshot for bookings:', e.message);
-      }
+      console.error('Could not attach Firestore onSnapshot for bookings with code:', e?.code || 'unknown', e);
+      callback(getLocalBookings());
     }
+  } else {
+    console.error('Firebase is not configured. Falling back to localStorage for bookings.');
+    callback(getLocalBookings());
   }
 
   const handleLocalUpdate = (e) => {
@@ -152,7 +146,9 @@ export const subscribeToBookings = (callback) => {
           callback(msg.data.data);
         }
       };
-    } catch (e) {}
+    } catch {
+      // Ignore broadcast errors
+    }
   }
 
   return () => {
@@ -199,7 +195,7 @@ export const validateBookingPayload = (data) => {
 };
 
 /**
- * Submit a customer project booking or custom project proposal
+ * Submit a customer project booking (Firestore first)
  */
 export const submitBooking = async (bookingData) => {
   const validation = validateBookingPayload(bookingData);
@@ -233,7 +229,6 @@ export const submitBooking = async (bookingData) => {
     updatedAt: new Date().toISOString()
   };
 
-  let createdRecord = null;
   if (isFirebaseConfigured() && db) {
     try {
       const bookingsRef = collection(db, 'bookings');
@@ -242,48 +237,54 @@ export const submitBooking = async (bookingData) => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      createdRecord = { id: docRef.id, ...payload };
+      const createdRecord = { id: docRef.id, ...payload };
+      
+      const local = getLocalBookings().filter(b => b.id !== docRef.id);
+      local.unshift(createdRecord);
+      saveLocalBookings(local);
+      console.info(`Booking created in Firestore with ID: ${docRef.id}`);
+      return createdRecord;
     } catch (error) {
-      if (!isPermissionDenied(error)) {
-        console.warn('Failed to submit booking to Firestore:', error);
-      }
+      console.error('Firestore submitBooking failed with code:', error?.code || 'unknown', error);
+      throw error;
     }
   }
 
-  // Always sync local cache and dispatch immediate live update events
-  const local = getLocalBookings();
-  const finalRecord = createdRecord || {
+  console.error('Firebase is not configured. Saving booking to localStorage fallback.');
+  const fallbackRecord = {
     ...payload,
     id: `book_${Date.now()}`
   };
-  local.unshift(finalRecord);
+  const local = getLocalBookings();
+  local.unshift(fallbackRecord);
   saveLocalBookings(local);
-  return finalRecord;
+  return fallbackRecord;
 };
 
 /**
- * Get all bookings (Admin only)
+ * Get all bookings from Firestore first (Admin only)
  */
 export const getAllBookings = async () => {
   if (isFirebaseConfigured() && db) {
     try {
       const bookingsRef = collection(db, 'bookings');
-      const q = query(bookingsRef, orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(bookingsRef);
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length > 0) return list;
+      list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      saveLocalBookings(list);
+      return list;
     } catch (error) {
-      if (!isPermissionDenied(error)) {
-        console.warn('Firestore bookings query failed, reading local store:', error);
-      }
+      console.error('Firestore getAllBookings failed with code:', error?.code || 'unknown', error);
+      return getLocalBookings();
     }
   }
 
+  console.error('Firebase is not configured. Falling back to localStorage for getAllBookings.');
   return getLocalBookings();
 };
 
 /**
- * Update booking status and private admin notes
+ * Update booking status and private admin notes in Firestore first
  */
 export const updateBookingStatus = async (id, status, adminNotes = '') => {
   const validStatuses = ['Pending', 'Under Review', 'Contacted', 'Confirmed', 'Rejected', 'Completed'];
@@ -304,12 +305,21 @@ export const updateBookingStatus = async (id, status, adminNotes = '') => {
         ...updates,
         updatedAt: serverTimestamp()
       });
+      const local = getLocalBookings();
+      const index = local.findIndex(b => b.id === id);
+      if (index !== -1) {
+        local[index] = { ...local[index], ...updates };
+        saveLocalBookings(local);
+      }
+      console.info(`Booking ${id} status updated in Firestore.`);
       return { id, ...updates };
     } catch (error) {
-      console.error('Failed to update booking status in Firestore:', error);
+      console.error('Firestore updateBookingStatus failed with code:', error?.code || 'unknown', error);
+      throw error;
     }
   }
 
+  console.error('Firebase is not configured. Updating booking in localStorage fallback.');
   const local = getLocalBookings();
   const index = local.findIndex(b => b.id === id);
   if (index !== -1) {
@@ -321,20 +331,25 @@ export const updateBookingStatus = async (id, status, adminNotes = '') => {
 };
 
 /**
- * Delete booking (Admin only)
+ * Delete booking in Firestore first (Admin only)
  */
 export const deleteBooking = async (id) => {
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'bookings', id);
       await deleteDoc(docRef);
+      const filtered = getLocalBookings().filter(b => b.id !== id);
+      saveLocalBookings(filtered);
+      console.info(`Booking ${id} deleted from Firestore.`);
+      return true;
     } catch (error) {
-      console.error('Failed to delete booking in Firestore:', error);
+      console.error('Firestore deleteBooking failed with code:', error?.code || 'unknown', error);
+      throw error;
     }
   }
 
-  const local = getLocalBookings();
-  const filtered = local.filter(b => b.id !== id);
+  console.error('Firebase is not configured. Deleting booking from localStorage fallback.');
+  const filtered = getLocalBookings().filter(b => b.id !== id);
   saveLocalBookings(filtered);
   return true;
 };

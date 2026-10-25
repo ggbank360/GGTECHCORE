@@ -1,4 +1,4 @@
-// Firebase Configuration & Service Initializer
+// Firebase Configuration & Service Initializer for GG TECHCORE
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -25,23 +25,55 @@ import {
   onAuthStateChanged 
 } from 'firebase/auth';
 
-// User's provided Firebase configuration
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBcJ9LyBWyqDZjY5bxlui_m_Bq3qx1nxJI",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "ggbank-d6735.firebaseapp.com",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://ggbank-d6735-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "ggbank-d6735",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "ggbank-d6735.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "19675824500",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:19675824500:web:ac34fb072cd7a88653ec21",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-1GP5RLN83B"
-};
+const REQUIRED_FIREBASE_ENV_VARS = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
 
-export const isFirebaseConfigured = () => true;
+const missingEnvVars = REQUIRED_FIREBASE_ENV_VARS.filter(
+  (key) => !import.meta.env[key] || String(import.meta.env[key]).trim() === ''
+);
+
+if (missingEnvVars.length > 0) {
+  console.error(
+    `🚨 GG TECHCORE: Firebase Configuration Missing!\n` +
+    `The following required environment variables are not defined:\n` +
+    missingEnvVars.map((v) => `  - ${v}`).join('\n') +
+    `\nPlease populate them in your .env file or production hosting dashboard.`
+  );
+}
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || undefined,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined
+};
 
 let app = null;
 let db = null;
 let auth = null;
+
+if (missingEnvVars.length === 0) {
+  try {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    db = getFirestore(app);
+    auth = getAuth(app);
+    console.info(`🚀 GG TECHCORE: Connected to Firebase Firestore & Auth (${firebaseConfig.projectId}).`);
+  } catch (error) {
+    console.error('🚨 Firebase initialization error:', error?.code || error?.message || error);
+  }
+}
+
+export const isFirebaseConfigured = () => missingEnvVars.length === 0 && app !== null && db !== null;
 
 export const isPermissionDenied = (err) => {
   if (!err) return false;
@@ -52,17 +84,6 @@ export const isPermissionDenied = (err) => {
          msg.includes('Permission denied') ||
          code === 'auth/admin-restricted-operation';
 };
-
-try {
-  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  db = getFirestore(app);
-  auth = getAuth(app);
-  console.info('🚀 GG TECHCORE: Connected to Firebase (ggbank-d6735) Firestore & Auth.');
-} catch (error) {
-  if (!isPermissionDenied(error)) {
-    console.warn('⚠️ Firebase init warning:', error);
-  }
-}
 
 export { 
   app, 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Send, 
@@ -6,8 +6,7 @@ import {
   FileText, 
   CheckCircle2, 
   AlertCircle, 
-  Loader2, 
-  Layers
+  Loader2
 } from 'lucide-react';
 import { submitBooking } from '../services/bookingService';
 import { uploadToCloudinary } from '../services/cloudinary';
@@ -39,25 +38,32 @@ export const BookingModal = ({ isOpen, onClose, preselectedProject = null }) => 
   const [errorMessage, setErrorMessage] = useState('');
   const [submissionSuccess, setSubmissionSuccess] = useState(null);
 
-  // Sync state when preselectedProject changes
-  useEffect(() => {
-    if (preselectedProject) {
-      setProjectTitle(`Custom Adaptation of: ${preselectedProject.title}`);
-      setProjectCategory(preselectedProject.category);
-      setProjectAbstract(`We would like to request an engineering proposal or custom adaptation based on: ${preselectedProject.title}.\n\nRequirements:\n`);
-      setHardwareRequirements(
-        (preselectedProject.hardwareRequirements || [])
-          .map(h => typeof h === 'string' ? h : `${h.item} (${h.spec})`)
-          .join('\n')
-      );
-      setSoftwareRequirements((preselectedProject.softwareRequirements || []).join('\n'));
-    } else {
-      setProjectTitle('');
-      setProjectAbstract('');
-      setHardwareRequirements('');
-      setSoftwareRequirements('');
+  // State synchronization when modal opens or preselected project changes
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  const [prevProject, setPrevProject] = useState(preselectedProject);
+
+  if (isOpen !== prevOpen || preselectedProject !== prevProject) {
+    setPrevOpen(isOpen);
+    setPrevProject(preselectedProject);
+    if (isOpen) {
+      if (preselectedProject) {
+        setProjectTitle(`Custom Adaptation of: ${preselectedProject.title}`);
+        setProjectCategory(preselectedProject.category);
+        setProjectAbstract(`We would like to request an engineering proposal or custom adaptation based on: ${preselectedProject.title}.\n\nRequirements:\n`);
+        setHardwareRequirements(
+          (preselectedProject.hardwareRequirements || [])
+            .map(h => typeof h === 'string' ? h : `${h.item} (${h.spec})`)
+            .join('\n')
+        );
+        setSoftwareRequirements((preselectedProject.softwareRequirements || []).join('\n'));
+      } else {
+        setProjectTitle('');
+        setProjectAbstract('');
+        setHardwareRequirements('');
+        setSoftwareRequirements('');
+      }
     }
-  }, [preselectedProject, isOpen]);
+  }
 
   if (!isOpen) return null;
 

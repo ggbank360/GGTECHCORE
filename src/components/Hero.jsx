@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Cpu, Zap, Activity, Layers, ShieldCheck, Terminal, Disc } from 'lucide-react';
+import { Cpu, Zap, Activity, Layers, ShieldCheck, Terminal, Disc } from 'lucide-react';
 
 export const Hero = ({ onExploreProjects, onBookProject, onContactUs }) => {
   return (

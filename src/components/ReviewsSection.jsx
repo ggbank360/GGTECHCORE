@@ -5,21 +5,27 @@ import { getAllReviews } from '../services/reviewService';
 export const ReviewsSection = ({ onOpenReviewModal }) => {
   const [reviews, setReviews] = useState([]);
 
-  const loadReviews = async () => {
-    const list = await getAllReviews();
-    setReviews(list);
-  };
-
   useEffect(() => {
-    loadReviews();
+    let isMounted = true;
+    getAllReviews().then((list) => {
+      if (isMounted) setReviews(list);
+    });
 
     const handleReviewsUpdated = (e) => {
-      if (e.detail) setReviews(e.detail);
-      else loadReviews();
+      if (e.detail) {
+        setReviews(e.detail);
+      } else {
+        getAllReviews().then((list) => {
+          if (isMounted) setReviews(list);
+        });
+      }
     };
 
     window.addEventListener('gg_reviews_updated', handleReviewsUpdated);
-    return () => window.removeEventListener('gg_reviews_updated', handleReviewsUpdated);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('gg_reviews_updated', handleReviewsUpdated);
+    };
   }, []);
 
   const averageRating = reviews.length > 0

@@ -6,7 +6,6 @@ import {
   Plus, 
   Trash2, 
   Edit3, 
-  Search, 
   Upload, 
   FileText, 
   Mail, 
@@ -15,7 +14,6 @@ import {
   X, 
   Loader2, 
   ExternalLink,
-  ShieldCheck,
   RefreshCw,
   Database,
   Star,
@@ -51,7 +49,7 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
   const [bookings, setBookings] = useState([]);
   const [inquiries, setInquiries] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [seedingLoading, setSeedingLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [firestoreStatus, setFirestoreStatus] = useState({ checked: false, ok: true, error: null });
@@ -92,13 +90,28 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
       if (testRes.ok) {
         setActionMessage(`✅ All ${count} projects successfully synced to Google Firebase Cloud for all users!`);
       } else {
-        setActionMessage(`⚠️ Firestore Cloud is still blocking access (${testRes.message}). Please publish the rules in Firebase Console first.`);
+        setActionMessage(`⚠️ Firestore Cloud is still blocking access (${testRes.message}). Please ensure you are logged in as ggbank360@gmail.com and rules are published.`);
       }
     } catch (err) {
-      alert('Sync error: ' + err.message);
+      alert('Sync error: ' + (err.message || err));
     } finally {
       setSyncingCloud(false);
       loadData();
+    }
+  };
+
+  const handleSeedInitialProjects = async () => {
+    if (window.confirm('Seed reference engineering projects into Firebase Firestore? Existing records will be safely updated.')) {
+      try {
+        setSeedingLoading(true);
+        const count = await seedInitialProjectsToFirestore();
+        setActionMessage(`✅ Successfully seeded ${count} reference projects directly into Firestore!`);
+        await loadData();
+      } catch (err) {
+        alert('Seed error: ' + (err.message || err));
+      } finally {
+        setSeedingLoading(false);
+      }
     }
   };
 
@@ -132,11 +145,10 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
   };
 
   useEffect(() => {
-    setLoading(true);
     const unsubProjects = subscribeToProjects((list) => {
       setProjects(list);
       setLoading(false);
-    });
+    }, false);
     const unsubBookings = subscribeToBookings((list) => {
       setBookings(list);
     });
@@ -365,9 +377,11 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
               <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.05rem', color: '#0f172a', fontWeight: 800 }}>
                 Admin Command Center
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: firestoreStatus.ok ? '#22c55e' : '#f59e0b', display: 'inline-block' }}></span>
                 <span>{firestoreStatus.ok ? 'Firebase Cloud Live Sync: Connected' : 'Firebase Cloud Sync: Blocked by Rules'}</span>
+                <span style={{ color: '#94a3b8' }}>•</span>
+                <span style={{ color: '#475569', fontWeight: 600 }}>{adminUser?.email || 'ggbank360@gmail.com'}</span>
               </div>
             </div>
           </div>
@@ -422,12 +436,11 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
                 Firebase Cloud Sync is Blocked (Permission Denied)
               </div>
               <div>
-                Changes are currently saving <strong>only in this browser's local cache</strong>. To update data for <strong>all users and devices worldwide in real-time</strong>:
+                Changes are currently saving in fallback cache. To authorize Firestore read/write access:
               </div>
               <ol style={{ margin: '0.65rem 0 0.85rem 1.25rem', padding: 0, fontWeight: 600 }}>
-                <li>Open <a href="https://console.firebase.google.com/project/ggbank-d6735/firestore/rules" target="_blank" rel="noreferrer" style={{ color: '#0284c7', textDecoration: 'underline' }}>Firebase Console &gt; Firestore &gt; Rules</a></li>
-                <li>Set rules to allow read/write: <code style={{ background: '#ffedd5', padding: '2px 6px', borderRadius: '4px', color: '#9a3412' }}>allow read, write: if true;</code></li>
-                <li>Click <strong>Publish</strong>.</li>
+                <li>Ensure production security rules are deployed: <code style={{ background: '#ffedd5', padding: '2px 6px', borderRadius: '4px', color: '#9a3412' }}>firebase deploy --only firestore:rules</code></li>
+                <li>Make sure you are signed in with the authorized admin account: <code style={{ background: '#ffedd5', padding: '2px 6px', borderRadius: '4px', color: '#9a3412' }}>ggbank360@gmail.com</code></li>
               </ol>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                 <button 
@@ -615,6 +628,26 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
                   </button>
 
                   <button
+                    onClick={handleSyncAllToCloud}
+                    disabled={syncingCloud}
+                    className="btn btn-secondary btn-sm"
+                    title="Push all local cached projects to Firestore cloud"
+                  >
+                    {syncingCloud ? <Loader2 size={15} className="animate-spin" /> : <CloudUpload size={15} />}
+                    <span>{syncingCloud ? 'Syncing...' : 'Push Cache to Cloud'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleSeedInitialProjects}
+                    disabled={seedingLoading}
+                    className="btn btn-secondary btn-sm"
+                    title="Seed initial reference engineering projects into Firestore"
+                  >
+                    {seedingLoading ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />}
+                    <span>{seedingLoading ? 'Seeding...' : 'Seed Projects in Firestore'}</span>
+                  </button>
+
+                  <button
                     onClick={handleClearMockProjects}
                     className="btn btn-outline btn-sm"
                     title="Remove sample mock projects"
@@ -796,13 +829,35 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
                 </div>
               </div>
 
-              <button
-                onClick={() => handleOpenProjectModal(null)}
-                className="btn btn-primary"
-              >
-                <Plus size={18} />
-                <span>Add New Project</span>
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={handleSeedInitialProjects}
+                  disabled={seedingLoading}
+                  className="btn btn-secondary"
+                  title="Seed initial engineering projects directly into Firestore"
+                >
+                  {seedingLoading ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+                  <span>{seedingLoading ? 'Seeding...' : 'Seed Reference Projects'}</span>
+                </button>
+
+                <button
+                  onClick={handleSyncAllToCloud}
+                  disabled={syncingCloud}
+                  className="btn btn-secondary"
+                  title="Push local cached projects to Firestore cloud"
+                >
+                  {syncingCloud ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />}
+                  <span>{syncingCloud ? 'Syncing...' : 'Push Cache to Firestore'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleOpenProjectModal(null)}
+                  className="btn btn-primary"
+                >
+                  <Plus size={18} />
+                  <span>Add New Project</span>
+                </button>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>

@@ -12,30 +12,22 @@ import {
   deleteDoc, 
   query, 
   where, 
-  orderBy, 
   onSnapshot,
-  serverTimestamp,
-  isPermissionDenied
+  serverTimestamp
 } from './firebase';
 import { initialProjects } from '../data/seedProjects';
 
 const LOCAL_STORAGE_KEY = 'gg_techcore_projects_v2';
-const MOCK_PROJECT_IDS = ['proj_esp32_smart_iv', 'proj_lidar_agv_rover', 'proj_bldc_pcb_controller'];
 
-// Initialize local storage cache - empty and cleared of default sample projects
+// Local storage cache management
 export const getLocalProjects = () => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
       return [];
     }
     const parsed = JSON.parse(raw);
-    const cleaned = parsed.filter(p => !MOCK_PROJECT_IDS.includes(p.id));
-    if (cleaned.length !== parsed.length) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
-    }
-    return cleaned;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Error reading projects from localStorage:', err);
     return [];
@@ -44,15 +36,16 @@ export const getLocalProjects = () => {
 
 export const saveLocalProjects = (projects) => {
   try {
-    const cleaned = projects.filter(p => !MOCK_PROJECT_IDS.includes(p.id));
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
-    window.dispatchEvent(new CustomEvent('gg_projects_updated', { detail: cleaned }));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projects));
+    window.dispatchEvent(new CustomEvent('gg_projects_updated', { detail: projects }));
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         const bc = new BroadcastChannel('gg_techcore_sync');
-        bc.postMessage({ type: 'PROJECTS_UPDATED', data: cleaned });
+        bc.postMessage({ type: 'PROJECTS_UPDATED', data: projects });
         bc.close();
-      } catch (e) {}
+      } catch {
+        // BroadcastChannel optional fallback
+      }
     }
   } catch (err) {
     console.error('Error saving projects to localStorage:', err);
@@ -60,60 +53,62 @@ export const saveLocalProjects = (projects) => {
 };
 
 /**
- * Real-time subscription for projects (Firestore onSnapshot + Local events + BroadcastChannel)
+ * Real-time subscription for projects (Firestore onSnapshot primary)
+ * @param {function} callback
+ * @param {boolean} publishedOnly - If true, queries only published projects
  */
-export const subscribeToProjects = (callback) => {
-  // 1. Initial call with local data
-  const initial = getLocalProjects();
-  callback(initial);
-
+export const subscribeToProjects = (callback, publishedOnly = false) => {
   let unsubscribeFirestore = null;
 
-  // 2. Firestore real-time listener if configured
   if (isFirebaseConfigured() && db) {
     try {
       const projectsRef = collection(db, 'projects');
-      const q = query(projectsRef, orderBy('createdAt', 'desc'));
+      const q = publishedOnly 
+        ? query(projectsRef, where('published', '==', true))
+        : query(projectsRef);
+
       unsubscribeFirestore = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const list = snapshot.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .filter(p => !MOCK_PROJECT_IDS.includes(p.id));
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
-          callback(list);
-        } else {
-          callback([]);
-        }
+        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        saveLocalProjects(list);
+        callback(list);
       }, (err) => {
-        if (!isPermissionDenied(err)) {
-          console.warn('Firestore onSnapshot project listener note:', err.message);
-        }
+        console.error('Firestore subscribeToProjects onSnapshot error with code:', err?.code || 'unknown', err);
+        const local = getLocalProjects();
+        callback(publishedOnly ? local.filter(p => p.published) : local);
       });
     } catch (e) {
-      if (!isPermissionDenied(e)) {
-        console.warn('Could not attach Firestore onSnapshot for projects:', e.message);
-      }
+      console.error('Could not attach Firestore onSnapshot for projects with code:', e?.code || 'unknown', e);
+      const local = getLocalProjects();
+      callback(publishedOnly ? local.filter(p => p.published) : local);
     }
+  } else {
+    console.error('Firebase is not configured. Falling back to localStorage for projects.');
+    const local = getLocalProjects();
+    callback(publishedOnly ? local.filter(p => p.published) : local);
   }
 
-  // 3. Local custom event listener
+  // Local custom event listener for immediate same-window updates
   const handleLocalUpdate = (e) => {
-    if (e.detail) callback(e.detail);
-    else callback(getLocalProjects());
+    const data = e.detail || getLocalProjects();
+    callback(publishedOnly ? data.filter(p => p.published) : data);
   };
   window.addEventListener('gg_projects_updated', handleLocalUpdate);
 
-  // 4. BroadcastChannel listener for multi-tab sync
+  // BroadcastChannel listener for multi-tab sync
   let bc = null;
   if (typeof BroadcastChannel !== 'undefined') {
     try {
       bc = new BroadcastChannel('gg_techcore_sync');
       bc.onmessage = (msg) => {
         if (msg.data && msg.data.type === 'PROJECTS_UPDATED') {
-          callback(msg.data.data);
+          const list = msg.data.data || [];
+          callback(publishedOnly ? list.filter(p => p.published) : list);
         }
       };
-    } catch (e) {}
+    } catch {
+      // Ignore broadcast channel errors
+    }
   }
 
   return () => {
@@ -124,45 +119,37 @@ export const subscribeToProjects = (callback) => {
 };
 
 /**
- * Fetch all projects (optionally filtering for published only)
- * @param {boolean} publishedOnly - If true, returns only published projects
+ * Fetch all projects from Firestore (primary)
+ * @param {boolean} publishedOnly - If true, queries with where('published', '==', true)
  */
 export const getAllProjects = async (publishedOnly = true) => {
   if (isFirebaseConfigured() && db) {
     try {
       const projectsRef = collection(db, 'projects');
-      let q = query(projectsRef, orderBy('createdAt', 'desc'));
-      if (publishedOnly) {
-        q = query(projectsRef, where('published', '==', true));
-      }
+      const q = publishedOnly 
+        ? query(projectsRef, where('published', '==', true))
+        : query(projectsRef);
+
       const snapshot = await getDocs(q);
-      const list = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(p => !MOCK_PROJECT_IDS.includes(p.id));
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       
-      if (list.length > 0) {
-        // Keep local cache synced with latest Firestore data
-        if (!publishedOnly) saveLocalProjects(list);
-        return list;
-      }
-      
-      const local = getLocalProjects();
-      return publishedOnly ? local.filter(p => p.published) : local;
+      saveLocalProjects(list);
+      return list;
     } catch (error) {
-      if (!isPermissionDenied(error)) {
-        console.warn('Firestore fetch fallback to local cache:', error.message);
-      }
+      console.error('Firestore getAllProjects failed with code:', error?.code || 'unknown', error);
       const local = getLocalProjects();
       return publishedOnly ? local.filter(p => p.published) : local;
     }
   }
 
+  console.error('Firebase is not configured. Falling back to localStorage for getAllProjects.');
   const local = getLocalProjects();
   return publishedOnly ? local.filter(p => p.published) : local;
 };
 
 /**
- * Fetch single project by ID
+ * Fetch single project by ID from Firestore
  */
 export const getProjectById = async (id) => {
   if (isFirebaseConfigured() && db) {
@@ -172,10 +159,9 @@ export const getProjectById = async (id) => {
       if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() };
       }
+      return null;
     } catch (err) {
-      if (!isPermissionDenied(err)) {
-        console.warn('Firestore getDoc check:', err.message);
-      }
+      console.error('Firestore getProjectById failed with code:', err?.code || 'unknown', err);
     }
   }
 
@@ -184,7 +170,7 @@ export const getProjectById = async (id) => {
 };
 
 /**
- * Check if Firebase Firestore is reachable and rules allow read/write
+ * Check if Firebase Firestore is reachable and readable
  */
 export const checkFirestoreAccess = async () => {
   if (!isFirebaseConfigured() || !db) {
@@ -192,23 +178,25 @@ export const checkFirestoreAccess = async () => {
   }
   try {
     const projectsRef = collection(db, 'projects');
-    await getDocs(query(projectsRef, orderBy('createdAt', 'desc')));
+    const q = query(projectsRef, where('published', '==', true));
+    await getDocs(q);
     return { ok: true };
   } catch (err) {
+    console.error('Firestore access check failed with code:', err?.code || 'unknown', err);
     return { 
       ok: false, 
-      code: err.code || 'permission-denied', 
-      message: err.message || 'Permission denied by Firestore rules.' 
+      code: err?.code || 'permission-denied', 
+      message: err?.message || 'Permission denied by Firestore rules.' 
     };
   }
 };
 
 /**
- * Upload all projects currently saved in local storage to Firestore
+ * One-time migration helper: push local storage projects to Firestore
  */
 export const syncAllLocalProjectsToFirestore = async () => {
   if (!isFirebaseConfigured() || !db) {
-    throw new Error('Firebase Firestore is not configured.');
+    throw new Error('Firebase Firestore is not configured or unavailable.');
   }
 
   const local = getLocalProjects();
@@ -216,134 +204,142 @@ export const syncAllLocalProjectsToFirestore = async () => {
 
   let successCount = 0;
   for (const proj of local) {
-    const docRef = doc(db, 'projects', proj.id);
-    await setDoc(docRef, {
-      ...proj,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-    successCount++;
+    try {
+      const docRef = doc(db, 'projects', proj.id);
+      await setDoc(docRef, {
+        ...proj,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      successCount++;
+    } catch (err) {
+      console.error(`Failed to migrate project ${proj.id} with code:`, err?.code || 'unknown', err);
+      throw err;
+    }
   }
 
   return successCount;
 };
 
 /**
- * Create a new engineering project (Admin)
+ * Create a new engineering project in Firestore first (Admin)
  */
 export const createProject = async (projectData) => {
-  const newId = `proj_${Date.now()}`;
-  const payload = {
-    ...projectData,
-    id: newId,
-    published: projectData.published ?? true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  // Always update local cache and dispatch event for immediate UI update
-  const local = getLocalProjects();
-  local.unshift(payload);
-  saveLocalProjects(local);
-
-  let synced = false;
-  let firestoreError = null;
+  const published = projectData.published ?? true;
 
   if (isFirebaseConfigured() && db) {
     try {
-      const docRef = doc(db, 'projects', newId);
-      await setDoc(docRef, {
-        ...payload,
+      const projectsRef = collection(db, 'projects');
+      const docRef = await addDoc(projectsRef, {
+        ...projectData,
+        published,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      synced = true;
-      console.info(`Project ${newId} saved to Firestore.`);
+
+      const newRecord = {
+        id: docRef.id,
+        ...projectData,
+        published,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const local = getLocalProjects().filter(p => p.id !== docRef.id);
+      local.unshift(newRecord);
+      saveLocalProjects(local);
+
+      console.info(`Project created in Firestore with ID: ${docRef.id}`);
+      return newRecord;
     } catch (error) {
-      firestoreError = error.message;
-      if (!isPermissionDenied(error)) {
-        console.warn('Firestore project create sync notice:', error.message);
-      }
+      console.error('Firestore createProject failed with code:', error?.code || 'unknown', error);
+      throw error;
     }
   }
 
-  return { ...payload, synced, firestoreError };
+  console.error('Firebase is not configured. Saving project to localStorage fallback.');
+  const fallbackRecord = {
+    ...projectData,
+    id: `proj_${Date.now()}`,
+    published,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  const local = getLocalProjects();
+  local.unshift(fallbackRecord);
+  saveLocalProjects(local);
+  return fallbackRecord;
 };
 
 /**
- * Update an existing project (Admin)
+ * Update an existing project in Firestore first (Admin)
  */
 export const updateProject = async (id, updates) => {
-  const payload = {
-    ...updates,
-    id,
-    updatedAt: new Date().toISOString()
-  };
-
-  // Immediate local state update and event dispatch
-  const local = getLocalProjects();
-  const index = local.findIndex(p => p.id === id);
-  let updatedRecord = null;
-  if (index !== -1) {
-    local[index] = { ...local[index], ...payload };
-    updatedRecord = local[index];
-  } else {
-    updatedRecord = payload;
-    local.unshift(updatedRecord);
-  }
-  saveLocalProjects(local);
-
-  let synced = false;
-  let firestoreError = null;
-
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'projects', id);
-      await setDoc(docRef, {
-        ...payload,
+      await updateDoc(docRef, {
+        ...updates,
         updatedAt: serverTimestamp()
-      }, { merge: true });
-      synced = true;
-      console.info(`Project ${id} updated in Firestore.`);
-    } catch (error) {
-      firestoreError = error.message;
-      if (!isPermissionDenied(error)) {
-        console.warn('Firestore project update sync notice:', error.message);
+      });
+
+      const local = getLocalProjects();
+      const index = local.findIndex(p => p.id === id);
+      const updatedRecord = { id, ...updates, updatedAt: new Date().toISOString() };
+      if (index !== -1) {
+        local[index] = { ...local[index], ...updatedRecord };
+      } else {
+        local.unshift(updatedRecord);
       }
+      saveLocalProjects(local);
+      console.info(`Project ${id} updated in Firestore.`);
+      return updatedRecord;
+    } catch (error) {
+      console.error('Firestore updateProject failed with code:', error?.code || 'unknown', error);
+      throw error;
     }
   }
 
-  return { ...updatedRecord, synced, firestoreError };
+  console.error('Firebase is not configured. Updating project in localStorage fallback.');
+  const local = getLocalProjects();
+  const index = local.findIndex(p => p.id === id);
+  const updatedRecord = { id, ...updates, updatedAt: new Date().toISOString() };
+  if (index !== -1) {
+    local[index] = { ...local[index], ...updatedRecord };
+    saveLocalProjects(local);
+  }
+  return updatedRecord;
 };
 
 /**
- * Delete a project (Admin)
+ * Delete a project in Firestore first (Admin)
  */
 export const deleteProject = async (id) => {
-  const local = getLocalProjects();
-  const filtered = local.filter(p => p.id !== id);
-  saveLocalProjects(filtered);
-
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'projects', id);
       await deleteDoc(docRef);
+      const filtered = getLocalProjects().filter(p => p.id !== id);
+      saveLocalProjects(filtered);
       console.info(`Project ${id} deleted from Firestore.`);
+      return true;
     } catch (error) {
-      if (!isPermissionDenied(error)) {
-        console.warn('Firestore project delete sync notice:', error.message);
-      }
+      console.error('Firestore deleteProject failed with code:', error?.code || 'unknown', error);
+      throw error;
     }
   }
 
+  console.error('Firebase is not configured. Deleting project from localStorage fallback.');
+  const filtered = getLocalProjects().filter(p => p.id !== id);
+  saveLocalProjects(filtered);
   return true;
 };
 
 /**
- * Seed all initial sample projects into Firestore (Admin utility)
+ * Seed initial sample projects directly into Firestore (Admin utility)
  */
 export const seedInitialProjectsToFirestore = async () => {
   if (!isFirebaseConfigured() || !db) {
-    throw new Error('Firebase Firestore is not configured.');
+    throw new Error('Firebase Firestore is not configured or unavailable.');
   }
 
   let count = 0;
@@ -354,14 +350,14 @@ export const seedInitialProjectsToFirestore = async () => {
         ...proj,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
       count++;
     } catch (e) {
-      console.warn(`Seed failed for ${proj.id}:`, e.message);
+      console.error(`Seed failed for project ${proj.id} with code:`, e?.code || 'unknown', e);
+      throw e;
     }
   }
 
-  // Update local
   saveLocalProjects(initialProjects);
   return count;
 };

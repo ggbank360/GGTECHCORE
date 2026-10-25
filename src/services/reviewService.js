@@ -1,4 +1,4 @@
-// Review Service — Customer Reviews & Ratings
+// Review Service — Customer Reviews & Ratings with Firestore primary persistence
 import { 
   db, 
   isFirebaseConfigured, 
@@ -7,11 +7,8 @@ import {
   getDocs, 
   addDoc, 
   deleteDoc, 
-  query, 
-  orderBy, 
   onSnapshot,
-  serverTimestamp,
-  isPermissionDenied
+  serverTimestamp
 } from './firebase';
 
 const LOCAL_STORAGE_REVIEWS_KEY = 'gg_techcore_reviews_v1';
@@ -63,10 +60,10 @@ export const getLocalReviews = () => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_REVIEWS_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_REVIEWS_KEY, JSON.stringify(initialReviews));
       return initialReviews;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : initialReviews;
   } catch {
     return initialReviews;
   }
@@ -81,7 +78,9 @@ export const saveLocalReviews = (reviews) => {
         const bc = new BroadcastChannel('gg_techcore_sync');
         bc.postMessage({ type: 'REVIEWS_UPDATED', data: reviews });
         bc.close();
-      } catch (e) {}
+      } catch {
+        // Optional multi-tab sync
+      }
     }
   } catch (err) {
     console.error('Error saving reviews:', err);
@@ -89,34 +88,30 @@ export const saveLocalReviews = (reviews) => {
 };
 
 /**
- * Real-time subscription for customer reviews
+ * Real-time subscription for customer reviews (Firestore primary)
  */
 export const subscribeToReviews = (callback) => {
-  const initial = getLocalReviews();
-  callback(initial);
-
   let unsubscribeFirestore = null;
 
   if (isFirebaseConfigured() && db) {
     try {
       const revRef = collection(db, 'reviews');
-      const q = query(revRef, orderBy('createdAt', 'desc'));
-      unsubscribeFirestore = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          localStorage.setItem(LOCAL_STORAGE_REVIEWS_KEY, JSON.stringify(list));
-          callback(list);
-        }
+      unsubscribeFirestore = onSnapshot(revRef, (snapshot) => {
+        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        saveLocalReviews(list);
+        callback(list);
       }, (err) => {
-        if (!isPermissionDenied(err)) {
-          console.warn('Firestore reviews onSnapshot note:', err.message);
-        }
+        console.error('Firestore reviews onSnapshot error with code:', err?.code || 'unknown', err);
+        callback(getLocalReviews());
       });
     } catch (e) {
-      if (!isPermissionDenied(e)) {
-        console.warn('Could not attach Firestore onSnapshot for reviews:', e.message);
-      }
+      console.error('Could not attach Firestore onSnapshot for reviews with code:', e?.code || 'unknown', e);
+      callback(getLocalReviews());
     }
+  } else {
+    console.error('Firebase is not configured. Falling back to localStorage for reviews.');
+    callback(getLocalReviews());
   }
 
   const handleLocalUpdate = (e) => {
@@ -134,7 +129,9 @@ export const subscribeToReviews = (callback) => {
           callback(msg.data.data);
         }
       };
-    } catch (e) {}
+    } catch {
+      // Ignore broadcast errors
+    }
   }
 
   return () => {
@@ -144,26 +141,31 @@ export const subscribeToReviews = (callback) => {
   };
 };
 
+/**
+ * Get all verified reviews from Firestore first
+ */
 export const getAllReviews = async () => {
   if (isFirebaseConfigured() && db) {
     try {
       const revRef = collection(db, 'reviews');
-      const q = query(revRef, orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(revRef);
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length > 0) {
-        saveLocalReviews(list);
-        return list;
-      }
+      list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      saveLocalReviews(list);
+      return list;
     } catch (e) {
-      if (!isPermissionDenied(e)) {
-        console.warn('Firestore reviews fetch note:', e.message);
-      }
+      console.error('Firestore getAllReviews failed with code:', e?.code || 'unknown', e);
+      return getLocalReviews();
     }
   }
+
+  console.error('Firebase is not configured. Falling back to localStorage for getAllReviews.');
   return getLocalReviews();
 };
 
+/**
+ * Submit verified review to Firestore first
+ */
 export const submitReview = async (reviewData) => {
   if (!reviewData.name?.trim()) throw new Error('Name is required.');
   if (!reviewData.comment?.trim()) throw new Error('Review comment is required.');
@@ -178,44 +180,55 @@ export const submitReview = async (reviewData) => {
     createdAt: new Date().toISOString()
   };
 
-  const newId = `rev_${Date.now()}`;
-  const fullRecord = { id: newId, ...payload };
-
-  const local = getLocalReviews();
-  local.unshift(fullRecord);
-  saveLocalReviews(local);
-
   if (isFirebaseConfigured() && db) {
     try {
       const revRef = collection(db, 'reviews');
-      await addDoc(revRef, {
+      const docRef = await addDoc(revRef, {
         ...payload,
         createdAt: serverTimestamp()
       });
+      const createdRecord = { id: docRef.id, ...payload };
+      
+      const local = getLocalReviews().filter(r => r.id !== docRef.id);
+      local.unshift(createdRecord);
+      saveLocalReviews(local);
+      console.info(`Review created in Firestore with ID: ${docRef.id}`);
+      return createdRecord;
     } catch (err) {
-      if (!isPermissionDenied(err)) {
-        console.warn('Firestore review save note:', err.message);
-      }
+      console.error('Firestore submitReview failed with code:', err?.code || 'unknown', err);
+      throw err;
     }
   }
 
+  console.error('Firebase is not configured. Saving review to localStorage fallback.');
+  const newId = `rev_${Date.now()}`;
+  const fullRecord = { id: newId, ...payload };
+  const local = getLocalReviews();
+  local.unshift(fullRecord);
+  saveLocalReviews(local);
   return fullRecord;
 };
 
+/**
+ * Delete review in Firestore first (Admin only)
+ */
 export const deleteReview = async (id) => {
-  const local = getLocalReviews();
-  const filtered = local.filter(r => r.id !== id);
-  saveLocalReviews(filtered);
-
   if (isFirebaseConfigured() && db) {
     try {
       const docRef = doc(db, 'reviews', id);
       await deleteDoc(docRef);
+      const filtered = getLocalReviews().filter(r => r.id !== id);
+      saveLocalReviews(filtered);
+      console.info(`Review ${id} deleted from Firestore.`);
+      return true;
     } catch (err) {
-      if (!isPermissionDenied(err)) {
-        console.warn('Firestore review delete note:', err.message);
-      }
+      console.error('Firestore deleteReview failed with code:', err?.code || 'unknown', err);
+      throw err;
     }
   }
+
+  console.error('Firebase is not configured. Deleting review from localStorage fallback.');
+  const filtered = getLocalReviews().filter(r => r.id !== id);
+  saveLocalReviews(filtered);
   return true;
 };

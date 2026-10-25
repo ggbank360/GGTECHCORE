@@ -2,28 +2,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper function to check if the requester is the authorized administrator
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'ggbank360@gmail.com';
+    }
+
     // 1. Projects Collection
-    // Public can read published projects. Admin can manage all projects.
+    // Public read only if published == true; write only for admin
     match /projects/{projectId} {
-      allow read, write: if true;
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
     }
 
     // 2. Bookings Collection
-    // Customers can submit booking ideas; Admin can view and update statuses.
+    // Public create; read, update and delete only for admin
     match /bookings/{bookingId} {
-      allow read, write: if true;
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
     }
 
     // 3. Inquiries Collection
-    // Public can submit contact messages; Admin can view and manage inquiries.
+    // Public create; read, update and delete only for admin
     match /inquiries/{inquiryId} {
-      allow read, write: if true;
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
     }
 
     // 4. Reviews Collection
-    // Clients can submit verified reviews; public can read reviews; Admin can moderate.
+    // Public read and create; update and delete only for admin
     match /reviews/{reviewId} {
-      allow read, write: if true;
+      allow read, create: if true;
+      allow update, delete: if isAdmin();
     }
   }
 }

@@ -2,6 +2,8 @@ import React from 'react';
 import { ShieldCheck, ArrowUp, Phone, Mail } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export const Footer = ({ onNavigate, onOpenAdmin }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -323,7 +325,7 @@ export const Footer = ({ onNavigate, onOpenAdmin }) => {
           gap: '1rem'
         }}>
           <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-            © {new Date().getFullYear()} GG TECHCORE. All Rights Reserved. Engineering ideas into reality.
+            © {CURRENT_YEAR} GG TECHCORE. All Rights Reserved. Engineering ideas into reality.
           </div>
 
           <button

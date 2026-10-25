@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ProjectCard } from '../components/ProjectCard';
 import { FilterBar } from '../components/FilterBar';
-import { Layers, AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export const ProjectsPage = ({ projects, onViewDetails, onBookProject }) => {
   const [selectedCategory, setSelectedCategory] = useState('All Projects');
