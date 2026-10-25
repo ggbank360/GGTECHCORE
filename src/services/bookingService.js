@@ -9,7 +9,8 @@ import {
   updateDoc, 
   deleteDoc, 
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  toISOStringSafe
 } from './firebase';
 
 const LOCAL_STORAGE_BOOKINGS_KEY = 'gg_techcore_bookings_v1';
@@ -117,7 +118,10 @@ export const subscribeToBookings = (callback) => {
     try {
       const bookingsRef = collection(db, 'bookings');
       unsubscribeFirestore = onSnapshot(bookingsRef, (snapshot) => {
-        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = snapshot.docs.map(d => {
+          const data = d.data();
+          return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+        });
         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         saveLocalBookings(list);
         callback(list);
@@ -272,7 +276,10 @@ export const getAllBookings = async () => {
     try {
       const bookingsRef = collection(db, 'bookings');
       const snapshot = await getDocs(bookingsRef);
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snapshot.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+      });
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       saveLocalBookings(list);
       return list;

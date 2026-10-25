@@ -495,3 +495,18 @@ a:hover {
   0% { transform: scale(1); opacity: 1; }
   100% { transform: scale(2.5); opacity: 0; }
 }
+
+/* Spinner Animation — used on Loader2 icons across the app */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 0.75s linear infinite;
+}
+
+/* Hide Admin label text on very small screens */
+@media (max-width: 380px) {
+  .admin-btn-label { display: none; }
+}

@@ -8,7 +8,8 @@ import {
   addDoc, 
   deleteDoc, 
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  toISOStringSafe
 } from './firebase';
 
 const LOCAL_STORAGE_REVIEWS_KEY = 'gg_techcore_reviews_v1';
@@ -100,7 +101,10 @@ export const subscribeToReviews = (callback) => {
     try {
       const revRef = collection(db, 'reviews');
       unsubscribeFirestore = onSnapshot(revRef, (snapshot) => {
-        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = snapshot.docs.map(d => {
+          const data = d.data();
+          return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt) };
+        });
         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         saveLocalReviews(list);
         callback(list);
@@ -152,7 +156,10 @@ export const getAllReviews = async () => {
     try {
       const revRef = collection(db, 'reviews');
       const snapshot = await getDocs(revRef);
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snapshot.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt) };
+      });
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       saveLocalReviews(list);
       return list;

@@ -1,30 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Star, MessageSquarePlus, CheckCircle2, Quote } from 'lucide-react';
-import { getAllReviews } from '../services/reviewService';
+import { subscribeToReviews } from '../services/reviewService';
 
 export const ReviewsSection = ({ onOpenReviewModal }) => {
   const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
-    let isMounted = true;
-    getAllReviews().then((list) => {
-      if (isMounted) setReviews(list);
+    // Real-time subscription — updates automatically when Firestore changes
+    const unsubscribe = subscribeToReviews((list) => {
+      setReviews(list);
     });
 
-    const handleReviewsUpdated = (e) => {
-      if (e.detail) {
-        setReviews(e.detail);
-      } else {
-        getAllReviews().then((list) => {
-          if (isMounted) setReviews(list);
-        });
-      }
-    };
-
-    window.addEventListener('gg_reviews_updated', handleReviewsUpdated);
     return () => {
-      isMounted = false;
-      window.removeEventListener('gg_reviews_updated', handleReviewsUpdated);
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 

@@ -13,7 +13,8 @@ import {
   query, 
   where, 
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  toISOStringSafe
 } from './firebase';
 import { initialProjects } from '../data/seedProjects';
 
@@ -72,7 +73,10 @@ export const subscribeToProjects = (callback, publishedOnly = false) => {
         : query(projectsRef);
 
       unsubscribeFirestore = onSnapshot(q, (snapshot) => {
-        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = snapshot.docs.map(d => {
+          const data = d.data();
+          return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+        });
         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         saveLocalProjects(list);
         callback(list);
@@ -135,7 +139,10 @@ export const getAllProjects = async (publishedOnly = true) => {
         : query(projectsRef);
 
       const snapshot = await getDocs(q);
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snapshot.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
+      });
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       
       saveLocalProjects(list);
@@ -161,7 +168,8 @@ export const getProjectById = async (id) => {
       const docRef = doc(db, 'projects', id);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() };
+        const data = docSnap.data();
+        return { id: docSnap.id, ...data, createdAt: toISOStringSafe(data.createdAt), updatedAt: toISOStringSafe(data.updatedAt) };
       }
       return null;
     } catch (err) {

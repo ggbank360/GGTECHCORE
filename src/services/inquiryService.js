@@ -8,7 +8,8 @@ import {
   addDoc, 
   deleteDoc,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  toISOStringSafe
 } from './firebase';
 
 const LOCAL_STORAGE_INQUIRIES_KEY = 'gg_techcore_inquiries_v1';
@@ -70,7 +71,10 @@ export const subscribeToInquiries = (callback) => {
     try {
       const inqRef = collection(db, 'inquiries');
       unsubscribeFirestore = onSnapshot(inqRef, (snapshot) => {
-        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = snapshot.docs.map(d => {
+          const data = d.data();
+          return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt) };
+        });
         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         saveLocalInquiries(list);
         callback(list);
@@ -176,7 +180,10 @@ export const getAllInquiries = async () => {
     try {
       const inqRef = collection(db, 'inquiries');
       const snapshot = await getDocs(inqRef);
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snapshot.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ...data, createdAt: toISOStringSafe(data.createdAt) };
+      });
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       saveLocalInquiries(list);
       return list;

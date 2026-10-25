@@ -70,6 +70,23 @@ if (missingEnvVars.length === 0) {
 
 export const isFirebaseConfigured = () => missingEnvVars.length === 0 && app !== null && db !== null;
 
+/**
+ * Safely converts a Firestore Timestamp, JS Date, or ISO string to an ISO string.
+ * Call this whenever you read `createdAt` / `updatedAt` from Firestore documents
+ * before storing or displaying them so the rest of the app always gets a plain string.
+ */
+export const toISOStringSafe = (val) => {
+  if (!val) return null;
+  // Firestore Timestamp objects have a .toDate() method
+  if (typeof val === 'object' && typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  // JS Date
+  if (val instanceof Date) return val.toISOString();
+  // Already a string or number
+  return String(val);
+};
+
 export const isPermissionDenied = (err) => {
   if (!err) return false;
   const msg = err.message || '';
