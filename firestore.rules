@@ -34,5 +34,17 @@ service cloud.firestore {
       allow read, create: if true;
       allow update, delete: if isAdmin();
     }
+
+    // 5. Quotations Collection
+    // Commercial estimates - read and write only for admin
+    match /quotations/{quotationId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 6. Invoices / Final Billing Collection
+    // Commercial bills - read and write only for admin
+    match /invoices/{invoiceId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

@@ -18,8 +18,10 @@ import {
   Database,
   Star,
   AlertTriangle,
-  CloudUpload
+  CloudUpload,
+  Receipt
 } from 'lucide-react';
+import { BillingModule } from './BillingModule';
 import { 
   getAllProjects, 
   createProject, 
@@ -494,6 +496,7 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
             { id: 'overview', label: 'Dashboard Overview', icon: Layers },
             { id: 'projects', label: `Projects Catalog (${totalProjects})`, icon: Database },
             { id: 'bookings', label: `Customer Ideas (${totalBookings})`, icon: Send },
+            { id: 'billing', label: 'Billing & Quotations', icon: Receipt },
             { id: 'reviews', label: `Client Reviews (${reviews.length})`, icon: Star },
             { id: 'inquiries', label: `Contact Inquiries (${inquiries.length})`, icon: Mail }
           ].map(tab => {
@@ -654,6 +657,31 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
                   >
                     <Trash2 size={15} color="#dc2626" />
                     <span style={{ color: '#dc2626' }}>Clear Default Projects</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Billing & Quotations Hub Quick Banner */}
+            <div className="tech-card" style={{ padding: '1.5rem', marginBottom: '2.5rem', background: '#f8fafc', border: '1.5px solid #cbd5e1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', color: '#0f172a', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Receipt size={20} color="#0284c7" />
+                    <span>Commercial Billing & Quotations Hub</span>
+                  </h3>
+                  <div style={{ fontSize: '0.88rem', color: '#64748b' }}>
+                    Generate independent engineering quotations and final commercial bills with automated calculations and A4 PDF export.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setActiveTab('billing')}
+                    className="btn btn-primary btn-sm"
+                  >
+                    <Receipt size={16} />
+                    <span>Open Billing Hub (Quotation & Final Bill)</span>
                   </button>
                 </div>
               </div>
@@ -1242,6 +1270,11 @@ export const AdminDashboard = ({ adminUser, onLogout, onClose }) => {
               </div>
             )}
           </div>
+        )}
+
+        {/* 6. BILLING & QUOTATION MODULE TAB */}
+        {activeTab === 'billing' && (
+          <BillingModule />
         )}
       </div>
 
