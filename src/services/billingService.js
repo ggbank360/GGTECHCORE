@@ -31,7 +31,9 @@ export const DEFAULT_COMPANY_PROFILE = {
   accountName: "GG TECHCORE",
   accountNumber: "50200084920192",
   ifscCode: "HDFC0001234",
-  upiId: "ggbank360@okaxis"
+  upiId: "ggbank360@okaxis",
+  signatoryName: "GOWTHAM N K",
+  signatoryTitle: "Authorized Engineering Lab Signatory"
 };
 
 export const getCompanyProfile = () => {

@@ -100,6 +100,10 @@ export const A4DocumentPreview = ({ type = 'quotation', data, onClose }) => {
   const companyPhone = data.companyPhone || data.companyDetails?.phone || '+91 77089 49507 / +91 63744 31113';
   const companyEmail = data.companyEmail || data.companyDetails?.email || 'ggbank360@gmail.com';
 
+  // Signatory Details
+  const signatoryName = data.signatoryName || data.companyDetails?.signatoryName || 'GOWTHAM N K';
+  const signatoryTitle = data.signatoryTitle || data.companyDetails?.signatoryTitle || (isQuotation ? 'Authorized Engineering Lab Signatory' : 'Authorized Commercial Finance Signatory');
+
   // Bank & Remittance details
   const bankName = data.bankName || data.companyDetails?.bankName || 'HDFC Bank';
   const accountName = data.accountName || data.companyDetails?.accountName || 'GG TECHCORE';
@@ -646,12 +650,15 @@ export const A4DocumentPreview = ({ type = 'quotation', data, onClose }) => {
                     <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a' }}>
                       For {companyName}
                     </div>
-                    <div style={{ height: '30px' }} />
-                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#475569' }}>
-                      Authorized Engineering Lab Signatory
+                    <div style={{ height: '14px' }} />
+                    <div style={{ fontSize: '0.96rem', fontWeight: 900, color: '#0f172a', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      {signatoryName}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-                      (Computer Generated Valid Document)
+                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: themeColor, marginTop: '2px' }}>
+                      {signatoryTitle}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>
+                      (Digitally Verified & Authorized)
                     </div>
                   </div>
                 </div>

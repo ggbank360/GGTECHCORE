@@ -92,6 +92,8 @@ export const BillingModule = () => {
       companyAddress: comp.address,
       companyPhone: comp.phone,
       companyEmail: comp.email,
+      signatoryName: comp.signatoryName || 'GOWTHAM N K',
+      signatoryTitle: comp.signatoryTitle || 'Authorized Engineering Lab Signatory',
       items: [
         { id: 'item_' + Date.now(), description: '', quantity: 1, unitPrice: 0, total: 0 }
       ],
@@ -132,6 +134,8 @@ export const BillingModule = () => {
       accountNumber: comp.accountNumber,
       ifscCode: comp.ifscCode,
       upiId: comp.upiId,
+      signatoryName: comp.signatoryName || 'GOWTHAM N K',
+      signatoryTitle: comp.signatoryTitle || 'Authorized Commercial Finance Signatory',
       discount: 0,
       items: [
         { id: 'item_' + Date.now(), description: '', quantity: 1, unitPrice: 0, total: 0 }
@@ -185,7 +189,14 @@ export const BillingModule = () => {
     saveCompanyProfile(companyDraft);
     setCompanyProfile(companyDraft);
     // Update active forms with new address if desired
-    setQuotationForm(prev => ({ ...prev, companyAddress: companyDraft.address, companyPhone: companyDraft.phone, companyEmail: companyDraft.email }));
+    setQuotationForm(prev => ({ 
+      ...prev, 
+      companyAddress: companyDraft.address, 
+      companyPhone: companyDraft.phone, 
+      companyEmail: companyDraft.email,
+      signatoryName: companyDraft.signatoryName || 'GOWTHAM N K',
+      signatoryTitle: companyDraft.signatoryTitle || 'Authorized Engineering Lab Signatory'
+    }));
     setBillingForm(prev => ({ 
       ...prev, 
       companyAddress: companyDraft.address, 
@@ -195,10 +206,12 @@ export const BillingModule = () => {
       accountName: companyDraft.accountName,
       accountNumber: companyDraft.accountNumber,
       ifscCode: companyDraft.ifscCode,
-      upiId: companyDraft.upiId
+      upiId: companyDraft.upiId,
+      signatoryName: companyDraft.signatoryName || 'GOWTHAM N K',
+      signatoryTitle: companyDraft.signatoryTitle || 'Authorized Commercial Finance Signatory'
     }));
     setIsCompanyModalOpen(false);
-    showBanner('✅ Company address and remittance details updated successfully!');
+    showBanner('✅ Company address, signatory name, and remittance details updated successfully!');
   };
 
   // -------------------------------------------------------------
@@ -266,6 +279,8 @@ export const BillingModule = () => {
       companyAddress: quotationForm.companyAddress || companyProfile.address,
       companyPhone: quotationForm.companyPhone || companyProfile.phone,
       companyEmail: quotationForm.companyEmail || companyProfile.email,
+      signatoryName: quotationForm.signatoryName || companyProfile.signatoryName || 'GOWTHAM N K',
+      signatoryTitle: quotationForm.signatoryTitle || companyProfile.signatoryTitle || 'Authorized Engineering Lab Signatory',
       totalAmount: quotationCalculatedTotal,
       items: quotationForm.items.map(it => ({
         ...it,
@@ -358,6 +373,8 @@ export const BillingModule = () => {
       accountNumber: billingForm.accountNumber || companyProfile.accountNumber,
       ifscCode: billingForm.ifscCode || companyProfile.ifscCode,
       upiId: billingForm.upiId || companyProfile.upiId,
+      signatoryName: billingForm.signatoryName || companyProfile.signatoryName || 'GOWTHAM N K',
+      signatoryTitle: billingForm.signatoryTitle || companyProfile.signatoryTitle || 'Authorized Commercial Finance Signatory',
       subtotal: billingSubtotal,
       discount: billingDiscount,
       finalAmount: billingFinalAmount,
@@ -1138,6 +1155,31 @@ export const BillingModule = () => {
                       placeholder="Payment terms, warranty, lead time..."
                       style={{ fontSize: '0.85rem' }}
                     />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.85rem' }} className="grid-cols-2">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Authorized Signatory Name</label>
+                        <input 
+                          type="text"
+                          value={quotationForm.signatoryName}
+                          onChange={(e) => setQuotationForm({ ...quotationForm, signatoryName: e.target.value })}
+                          className="form-input"
+                          placeholder="e.g. GOWTHAM N K"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Signatory Title / Designation</label>
+                        <input 
+                          type="text"
+                          value={quotationForm.signatoryTitle}
+                          onChange={(e) => setQuotationForm({ ...quotationForm, signatoryTitle: e.target.value })}
+                          className="form-input"
+                          placeholder="e.g. Authorized Engineering Lab Signatory"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -1186,6 +1228,8 @@ export const BillingModule = () => {
                           companyAddress: quotationForm.companyAddress || companyProfile.address,
                           companyPhone: quotationForm.companyPhone || companyProfile.phone,
                           companyEmail: quotationForm.companyEmail || companyProfile.email,
+                          signatoryName: quotationForm.signatoryName || companyProfile.signatoryName || 'GOWTHAM N K',
+                          signatoryTitle: quotationForm.signatoryTitle || companyProfile.signatoryTitle || 'Authorized Engineering Lab Signatory',
                           totalAmount: quotationCalculatedTotal,
                           items: quotationForm.items.map(it => ({
                             ...it,
@@ -1209,6 +1253,8 @@ export const BillingModule = () => {
                           companyAddress: quotationForm.companyAddress || companyProfile.address,
                           companyPhone: quotationForm.companyPhone || companyProfile.phone,
                           companyEmail: quotationForm.companyEmail || companyProfile.email,
+                          signatoryName: quotationForm.signatoryName || companyProfile.signatoryName || 'GOWTHAM N K',
+                          signatoryTitle: quotationForm.signatoryTitle || companyProfile.signatoryTitle || 'Authorized Engineering Lab Signatory',
                           totalAmount: quotationCalculatedTotal,
                           items: quotationForm.items.map(it => ({
                             ...it,
@@ -1902,6 +1948,31 @@ export const BillingModule = () => {
                       placeholder="Payment details, receipt notes, warranty..."
                       style={{ fontSize: '0.85rem' }}
                     />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.85rem' }} className="grid-cols-2">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Authorized Signatory Name</label>
+                        <input 
+                          type="text"
+                          value={billingForm.signatoryName}
+                          onChange={(e) => setBillingForm({ ...billingForm, signatoryName: e.target.value })}
+                          className="form-input"
+                          placeholder="e.g. GOWTHAM N K"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Signatory Title / Designation</label>
+                        <input 
+                          type="text"
+                          value={billingForm.signatoryTitle}
+                          onChange={(e) => setBillingForm({ ...billingForm, signatoryTitle: e.target.value })}
+                          className="form-input"
+                          placeholder="e.g. Authorized Commercial Finance Signatory"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -1981,6 +2052,8 @@ export const BillingModule = () => {
                           accountNumber: billingForm.accountNumber || companyProfile.accountNumber,
                           ifscCode: billingForm.ifscCode || companyProfile.ifscCode,
                           upiId: billingForm.upiId || companyProfile.upiId,
+                          signatoryName: billingForm.signatoryName || companyProfile.signatoryName || 'GOWTHAM N K',
+                          signatoryTitle: billingForm.signatoryTitle || companyProfile.signatoryTitle || 'Authorized Commercial Finance Signatory',
                           subtotal: billingSubtotal,
                           discount: billingDiscount,
                           finalAmount: billingFinalAmount,
@@ -2011,6 +2084,8 @@ export const BillingModule = () => {
                           accountNumber: billingForm.accountNumber || companyProfile.accountNumber,
                           ifscCode: billingForm.ifscCode || companyProfile.ifscCode,
                           upiId: billingForm.upiId || companyProfile.upiId,
+                          signatoryName: billingForm.signatoryName || companyProfile.signatoryName || 'GOWTHAM N K',
+                          signatoryTitle: billingForm.signatoryTitle || companyProfile.signatoryTitle || 'Authorized Commercial Finance Signatory',
                           subtotal: billingSubtotal,
                           discount: billingDiscount,
                           finalAmount: billingFinalAmount,
@@ -2353,6 +2428,36 @@ export const BillingModule = () => {
                       value={companyDraft.upiId}
                       onChange={(e) => setCompanyDraft({ ...companyDraft, upiId: e.target.value })}
                       className="form-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginTop: '1rem' }}>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem' }}>
+                  Authorized Signatory Information
+                </h4>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }} className="grid-cols-2">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>Signatory Name (Printed in Signature block)</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.signatoryName || ''}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, signatoryName: e.target.value })}
+                      className="form-input"
+                      placeholder="e.g. GOWTHAM N K"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>Signatory Title / Designation</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.signatoryTitle || ''}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, signatoryTitle: e.target.value })}
+                      className="form-input"
+                      placeholder="e.g. Authorized Engineering Lab Signatory"
                     />
                   </div>
                 </div>

@@ -281,17 +281,26 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
   doc.text(termLines, margin, y);
 
   // Signatory
-  const signX = pageWidth - margin - 45;
-  const signY = y + 10;
+  const signatoryName = quotation.signatoryName || quotation.companyDetails?.signatoryName || 'GOWTHAM N K';
+  const signatoryTitle = quotation.signatoryTitle || quotation.companyDetails?.signatoryTitle || 'Authorized Engineering Lab Signatory';
+
+  const signX = pageWidth - margin - 52;
+  const signY = y + 8;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
   doc.text(`For ${companyName}`, signX, signY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(2, 132, 199);
+  doc.text(signatoryName, signX, signY + 9);
+
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(100, 116, 139);
-  doc.text('Authorized Engineering Lab Signatory', signX, signY + 12);
-  doc.text('(Digitally Verified Document)', signX, signY + 16);
+  doc.text(signatoryTitle, signX, signY + 13.5);
+  doc.text('(Digitally Verified Document)', signX, signY + 17);
 
   // Footer bar
   doc.setFillColor(2, 132, 199);
@@ -633,17 +642,26 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   doc.text(noteLines, margin, y);
 
   // Signatory
-  const signX = pageWidth - margin - 45;
+  const signatoryName = invoice.signatoryName || invoice.companyDetails?.signatoryName || 'GOWTHAM N K';
+  const signatoryTitle = invoice.signatoryTitle || invoice.companyDetails?.signatoryTitle || 'Authorized Finance Signatory';
+
+  const signX = pageWidth - margin - 52;
   const signY = y + 7;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
   doc.text(`For ${companyName}`, signX, signY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(37, 99, 235);
+  doc.text(signatoryName, signX, signY + 9);
+
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(100, 116, 139);
-  doc.text('Authorized Finance Signatory', signX, signY + 12);
-  doc.text('(Digitally Generated Invoice)', signX, signY + 16);
+  doc.text(signatoryTitle, signX, signY + 13.5);
+  doc.text('(Digitally Generated Invoice)', signX, signY + 17);
 
   // Footer bar
   doc.setFillColor(37, 99, 235);
