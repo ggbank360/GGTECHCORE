@@ -533,3 +533,4 @@ export const subscribeToInvoices = (callback) => {
     window.removeEventListener('gg_invoices_updated', handleLocalUpdate);
   };
 };
+

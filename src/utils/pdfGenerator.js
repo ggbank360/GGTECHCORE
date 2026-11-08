@@ -630,3 +630,4 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
 
   return doc;
 };
+

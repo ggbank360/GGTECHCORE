@@ -70,3 +70,4 @@ export function formatINR(amount) {
     minimumFractionDigits: 2
   }).format(val);
 }
+
