@@ -10,20 +10,26 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
 
   const pageWidth = 210;
   const pageHeight = 297;
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2; // 180mm
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2; // 182mm
   let y = margin;
+
+  const companyName = quotation.companyNameHeader || quotation.companyDetails?.companyName || 'GG TECHCORE';
+  const companyTagline = quotation.companyTagline || quotation.companyDetails?.tagline || 'ENGINEERING IDEAS INTO REALITY';
+  const companyAddress = quotation.companyAddress || quotation.companyDetails?.address || 'TechCore Engineering Park, Electronics Innovation Hub, Coimbatore, Tamil Nadu - 641014, India';
+  const companyPhone = quotation.companyPhone || quotation.companyDetails?.phone || '+91 77089 49507 / +91 63744 31113';
+  const companyEmail = quotation.companyEmail || quotation.companyDetails?.email || 'ggbank360@gmail.com';
 
   // 1. Top Decorative Brand Bar
   doc.setFillColor(2, 132, 199); // #0284c7 Primary Cyan/Blue
   doc.rect(0, 0, pageWidth, 5, 'F');
 
   // 2. Header Section
-  y = 16;
+  y = 15;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(15, 23, 42); // #0f172a
-  doc.text('GG TECHCORE', margin, y);
+  doc.text(companyName, margin, y);
 
   // Document Type Badge
   doc.setFillColor(224, 242, 254); // #e0f2fe
@@ -36,24 +42,26 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(2, 132, 199);
-  doc.text('ENGINEERING IDEAS INTO REALITY', margin, y);
+  doc.text(companyTagline, margin, y);
 
   y += 5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(100, 116, 139);
   doc.text('Hardware Prototyping | Embedded Systems | IoT & Robotics Lab', margin, y);
-  doc.text('Email: ggbank360@gmail.com | Phone: +91 77089 49507', margin, y + 4);
-  doc.text('TechCore Engineering Park, Electronics Innovation Hub, Coimbatore, India', margin, y + 8);
+  doc.text(`Email: ${companyEmail} | Phone: ${companyPhone}`, margin, y + 4);
 
-  y += 14;
+  const compAddressLines = doc.splitTextToSize(`Address: ${companyAddress}`, contentWidth - 60);
+  doc.text(compAddressLines, margin, y + 8);
+
+  y += 8 + (compAddressLines.length * 4);
 
   // Divider line
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageWidth - margin, y);
 
-  y += 6;
+  y += 5;
 
   // 3. Information Grid (Quotation Details & Customer Details)
   const boxWidth = (contentWidth - 6) / 2;
@@ -66,26 +74,26 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
   doc.roundedRect(margin, y, boxWidth, boxHeight, 2, 2, 'S');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(2, 132, 199);
-  doc.text('QUOTED TO (CLIENT DETAILS):', margin + 4, y + 6);
+  doc.text('QUOTED TO (CLIENT DETAILS):', margin + 4, y + 5.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(quotation.customerName || 'N/A', margin + 4, y + 12);
+  doc.text(quotation.customerName || 'N/A', margin + 4, y + 11.5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(71, 85, 105);
   if (quotation.companyName) {
-    doc.text(quotation.companyName, margin + 4, y + 17);
+    doc.text(quotation.companyName, margin + 4, y + 16.5);
   }
   const clientContact = [quotation.phone, quotation.email].filter(Boolean).join(' | ');
-  doc.text(clientContact || 'Contact: N/A', margin + 4, y + 22);
+  doc.text(clientContact || 'Contact: N/A', margin + 4, y + 21.5);
 
-  const addressLines = doc.splitTextToSize(quotation.address || 'Location: Tamil Nadu, India', boxWidth - 8);
-  doc.text(addressLines, margin + 4, y + 27);
+  const addressLines = doc.splitTextToSize(quotation.address || 'Address: Tamil Nadu, India', boxWidth - 8);
+  doc.text(addressLines, margin + 4, y + 26.5);
 
   // Right Box: Quotation Meta
   const rightX = margin + boxWidth + 6;
@@ -95,45 +103,46 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
   doc.roundedRect(rightX, y, boxWidth, boxHeight, 2, 2, 'S');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(2, 132, 199);
-  doc.text('DOCUMENT SPECIFICATIONS:', rightX + 4, y + 6);
+  doc.text('DOCUMENT SPECIFICATIONS:', rightX + 4, y + 5.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text('Quotation No:', rightX + 4, y + 13);
+  doc.text('Quotation No:', rightX + 4, y + 12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(2, 132, 199);
-  doc.text(quotation.quotationNumber || 'QT-NEW', rightX + 32, y + 13);
+  doc.text(quotation.quotationNumber || 'QT-NEW', rightX + 32, y + 12);
 
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.2);
   doc.setTextColor(71, 85, 105);
-  doc.text('Issue Date:', rightX + 4, y + 19);
-  doc.text(quotation.date || new Date().toISOString().split('T')[0], rightX + 32, y + 19);
+  doc.text('Issue Date:', rightX + 4, y + 18);
+  doc.text(quotation.date || new Date().toISOString().split('T')[0], rightX + 32, y + 18);
 
-  doc.text('Valid Until:', rightX + 4, y + 25);
-  doc.text(quotation.validUntil || '30 Days from date', rightX + 32, y + 25);
+  doc.text('Valid Until:', rightX + 4, y + 24);
+  doc.text(quotation.validUntil || '30 Days from date', rightX + 32, y + 24);
 
-  doc.text('Quotation Status:', rightX + 4, y + 31);
+  doc.text('Quotation Status:', rightX + 4, y + 30);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(quotation.status === 'Accepted' ? 22 : (quotation.status === 'Rejected' ? 220 : 2), quotation.status === 'Accepted' ? 163 : 132, quotation.status === 'Accepted' ? 74 : 199);
-  doc.text((quotation.status || 'Active').toUpperCase(), rightX + 32, y + 31);
+  doc.text((quotation.status || 'Active').toUpperCase(), rightX + 32, y + 30);
 
-  y += boxHeight + 8;
+  y += boxHeight + 7;
 
   // 4. Products & Services Table Header
   const colX = {
     sno: margin,
     desc: margin + 12,
-    qty: margin + 115,
-    unitPrice: margin + 135,
-    total: margin + 158
+    qty: margin + 117,
+    unitPrice: margin + 137,
+    total: margin + 160
   };
 
   const colWidths = {
     sno: 12,
-    desc: 103,
+    desc: 105,
     qty: 20,
     unitPrice: 23,
     total: 22
@@ -168,13 +177,12 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
     calculatedTotal += itemTotal;
 
     const descLines = doc.splitTextToSize(item.description || 'Custom Engineering Service', colWidths.desc - 4);
-    const rowHeight = Math.max(8, descLines.length * 4.5 + 3);
+    const rowHeight = Math.max(7.5, descLines.length * 4.3 + 3);
 
     // Page break check
     if (y + rowHeight > pageHeight - 50) {
       doc.addPage();
       y = margin;
-      // Repeat Header on new page
       doc.setFillColor(15, 23, 42);
       doc.rect(margin, y, contentWidth, 8, 'F');
       doc.setFont('helvetica', 'bold');
@@ -188,46 +196,41 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
       y += 8;
     }
 
-    // Row alternating background
     if (index % 2 === 1) {
       doc.setFillColor(248, 250, 252);
       doc.rect(margin, y, contentWidth, rowHeight, 'F');
     }
 
-    // Border line bottom
     doc.setDrawColor(241, 245, 249);
     doc.line(margin, y + rowHeight, margin + contentWidth, y + rowHeight);
 
-    // Row text
     doc.setTextColor(51, 65, 85);
-    doc.text(String(index + 1), colX.sno + 4, y + 5.5);
-    doc.text(descLines, colX.desc + 2, y + 5.5);
-    doc.text(String(itemQty), colX.qty + 10, y + 5.5, { align: 'center' });
-    doc.text(itemPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.unitPrice + 19, y + 5.5, { align: 'right' });
+    doc.text(String(index + 1), colX.sno + 4, y + 5.2);
+    doc.text(descLines, colX.desc + 2, y + 5.2);
+    doc.text(String(itemQty), colX.qty + 10, y + 5.2, { align: 'center' });
+    doc.text(itemPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.unitPrice + 19, y + 5.2, { align: 'right' });
     
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.total + 20, y + 5.5, { align: 'right' });
+    doc.text(itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.total + 20, y + 5.2, { align: 'right' });
     doc.setFont('helvetica', 'normal');
 
     y += rowHeight;
   });
 
-  // Table bottom border
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
 
   y += 4;
 
-  // 5. Total Amount Calculation (Strictly No GST or Tax calculations)
+  // 5. Total Amount Calculation (No GST or Tax calculations)
   const finalQuotationTotal = Number(quotation.totalAmount) || calculatedTotal;
 
-  // Summary Box
   const summaryWidth = 75;
   const summaryX = pageWidth - margin - summaryWidth;
 
-  doc.setFillColor(240, 249, 255); // light sky
+  doc.setFillColor(240, 249, 255);
   doc.roundedRect(summaryX, y, summaryWidth, 14, 2, 2, 'F');
   doc.setDrawColor(2, 132, 199);
   doc.roundedRect(summaryX, y, summaryWidth, 14, 2, 2, 'S');
@@ -283,7 +286,7 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text('For GG TECHCORE', signX, signY);
+  doc.text(`For ${companyName}`, signX, signY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
@@ -295,7 +298,7 @@ export const generateQuotationPDF = (quotation, autoDownload = true) => {
   doc.rect(0, pageHeight - 4, pageWidth, 4, 'F');
 
   if (autoDownload) {
-    const filename = `GGTECHCORE_Quotation_${quotation.quotationNumber || 'QT'}.pdf`;
+    const filename = `${companyName.replace(/[^a-zA-Z0-9]/g, '_')}_Quotation_${quotation.quotationNumber || 'QT'}.pdf`;
     doc.save(filename);
   }
 
@@ -311,20 +314,32 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
 
   const pageWidth = 210;
   const pageHeight = 297;
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2; // 180mm
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2; // 182mm
   let y = margin;
+
+  const companyName = invoice.companyNameHeader || invoice.companyDetails?.companyName || 'GG TECHCORE';
+  const companyTagline = invoice.companyTagline || invoice.companyDetails?.tagline || 'ENGINEERING IDEAS INTO REALITY';
+  const companyAddress = invoice.companyAddress || invoice.companyDetails?.address || 'TechCore Engineering Park, Electronics Innovation Hub, Coimbatore, Tamil Nadu - 641014, India';
+  const companyPhone = invoice.companyPhone || invoice.companyDetails?.phone || '+91 77089 49507 / +91 63744 31113';
+  const companyEmail = invoice.companyEmail || invoice.companyDetails?.email || 'ggbank360@gmail.com';
+
+  const bankName = invoice.bankName || invoice.companyDetails?.bankName || 'HDFC Bank';
+  const accountName = invoice.accountName || invoice.companyDetails?.accountName || 'GG TECHCORE';
+  const accountNumber = invoice.accountNumber || invoice.companyDetails?.accountNumber || '50200084920192';
+  const ifscCode = invoice.ifscCode || invoice.companyDetails?.ifscCode || 'HDFC0001234';
+  const upiId = invoice.upiId || invoice.companyDetails?.upiId || 'ggbank360@okaxis';
 
   // 1. Top Decorative Brand Bar
   doc.setFillColor(37, 99, 235); // #2563eb Blue accent
   doc.rect(0, 0, pageWidth, 5, 'F');
 
   // 2. Header Section
-  y = 16;
+  y = 15;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(15, 23, 42); // #0f172a
-  doc.text('GG TECHCORE', margin, y);
+  doc.text(companyName, margin, y);
 
   // Document Type Badge
   doc.setFillColor(238, 242, 255); // #eef2ff
@@ -337,24 +352,26 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(37, 99, 235);
-  doc.text('ENGINEERING IDEAS INTO REALITY', margin, y);
+  doc.text(companyTagline, margin, y);
 
   y += 5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(100, 116, 139);
   doc.text('Hardware Prototyping | Embedded Systems | IoT & Robotics Lab', margin, y);
-  doc.text('Email: ggbank360@gmail.com | Phone: +91 77089 49507', margin, y + 4);
-  doc.text('TechCore Engineering Park, Electronics Innovation Hub, Coimbatore, India', margin, y + 8);
+  doc.text(`Email: ${companyEmail} | Phone: ${companyPhone}`, margin, y + 4);
 
-  y += 14;
+  const compAddressLines = doc.splitTextToSize(`Address: ${companyAddress}`, contentWidth - 60);
+  doc.text(compAddressLines, margin, y + 8);
+
+  y += 8 + (compAddressLines.length * 4);
 
   // Divider line
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageWidth - margin, y);
 
-  y += 6;
+  y += 5;
 
   // 3. Information Grid (Bill To & Invoice Meta)
   const boxWidth = (contentWidth - 6) / 2;
@@ -367,26 +384,26 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   doc.roundedRect(margin, y, boxWidth, boxHeight, 2, 2, 'S');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(37, 99, 235);
-  doc.text('BILLED TO (CUSTOMER DETAILS):', margin + 4, y + 6);
+  doc.text('BILLED TO (CUSTOMER DETAILS):', margin + 4, y + 5.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(invoice.customerName || 'N/A', margin + 4, y + 12);
+  doc.text(invoice.customerName || 'N/A', margin + 4, y + 11.5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(71, 85, 105);
   if (invoice.companyName) {
-    doc.text(invoice.companyName, margin + 4, y + 17);
+    doc.text(invoice.companyName, margin + 4, y + 16.5);
   }
   const clientContact = [invoice.phone, invoice.email].filter(Boolean).join(' | ');
-  doc.text(clientContact || 'Contact: N/A', margin + 4, y + 22);
+  doc.text(clientContact || 'Contact: N/A', margin + 4, y + 21.5);
 
-  const addressLines = doc.splitTextToSize(invoice.address || 'Location: Tamil Nadu, India', boxWidth - 8);
-  doc.text(addressLines, margin + 4, y + 27);
+  const addressLines = doc.splitTextToSize(invoice.address || 'Address: Tamil Nadu, India', boxWidth - 8);
+  doc.text(addressLines, margin + 4, y + 26.5);
 
   // Right Box: Invoice Meta
   const rightX = margin + boxWidth + 6;
@@ -396,52 +413,52 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   doc.roundedRect(rightX, y, boxWidth, boxHeight, 2, 2, 'S');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(37, 99, 235);
-  doc.text('INVOICE SPECIFICATIONS:', rightX + 4, y + 6);
+  doc.text('INVOICE SPECIFICATIONS:', rightX + 4, y + 5.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text('Invoice No:', rightX + 4, y + 13);
+  doc.text('Invoice No:', rightX + 4, y + 12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(37, 99, 235);
-  doc.text(invoice.invoiceNumber || 'INV-NEW', rightX + 30, y + 13);
+  doc.text(invoice.invoiceNumber || 'INV-NEW', rightX + 30, y + 12);
 
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.2);
   doc.setTextColor(71, 85, 105);
-  doc.text('Invoice Date:', rightX + 4, y + 19);
-  doc.text(invoice.date || new Date().toISOString().split('T')[0], rightX + 30, y + 19);
+  doc.text('Invoice Date:', rightX + 4, y + 18);
+  doc.text(invoice.date || new Date().toISOString().split('T')[0], rightX + 30, y + 18);
 
-  doc.text('Due Date:', rightX + 4, y + 25);
-  doc.text(invoice.dueDate || 'Upon Receipt', rightX + 30, y + 25);
+  doc.text('Due Date:', rightX + 4, y + 24);
+  doc.text(invoice.dueDate || 'Upon Receipt', rightX + 30, y + 24);
 
-  doc.text('Payment Status:', rightX + 4, y + 31);
+  doc.text('Payment Status:', rightX + 4, y + 30);
   const isPaid = (invoice.paymentStatus || '').toLowerCase() === 'paid';
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(isPaid ? 22 : 217, isPaid ? 163 : 119, isPaid ? 74 : 6);
-  doc.text((invoice.paymentStatus || 'Pending').toUpperCase(), rightX + 30, y + 31);
+  doc.text((invoice.paymentStatus || 'Pending').toUpperCase(), rightX + 30, y + 30);
 
-  y += boxHeight + 8;
+  y += boxHeight + 7;
 
   // 4. Products & Services Table Header
   const colX = {
     sno: margin,
     desc: margin + 12,
-    qty: margin + 115,
-    unitPrice: margin + 135,
-    total: margin + 158
+    qty: margin + 117,
+    unitPrice: margin + 137,
+    total: margin + 160
   };
 
   const colWidths = {
     sno: 12,
-    desc: 103,
+    desc: 105,
     qty: 20,
     unitPrice: 23,
     total: 22
   };
 
-  // Header background
   doc.setFillColor(15, 23, 42); // Dark Navy header
   doc.rect(margin, y, contentWidth, 8, 'F');
 
@@ -449,7 +466,7 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   doc.setFontSize(8.5);
   doc.setTextColor(255, 255, 255);
   doc.text('#', colX.sno + 3, y + 5.5);
-  doc.text('PRODUCT / SERVICE DETAILS', colX.desc + 2, y + 5.5);
+  doc.text('PRODUCT / SERVICE DETAILS & SPECS', colX.desc + 2, y + 5.5);
   doc.text('QTY', colX.qty + 10, y + 5.5, { align: 'center' });
   doc.text('PRICE (Rs.)', colX.unitPrice + 19, y + 5.5, { align: 'right' });
   doc.text('TOTAL (Rs.)', colX.total + 20, y + 5.5, { align: 'right' });
@@ -470,9 +487,8 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
     calculatedSubtotal += itemTotal;
 
     const descLines = doc.splitTextToSize(item.description || 'Engineering Service', colWidths.desc - 4);
-    const rowHeight = Math.max(8, descLines.length * 4.5 + 3);
+    const rowHeight = Math.max(7.5, descLines.length * 4.3 + 3);
 
-    // Page break check
     if (y + rowHeight > pageHeight - 65) {
       doc.addPage();
       y = margin;
@@ -489,32 +505,28 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
       y += 8;
     }
 
-    // Row alternating background
     if (index % 2 === 1) {
       doc.setFillColor(248, 250, 252);
       doc.rect(margin, y, contentWidth, rowHeight, 'F');
     }
 
-    // Border line bottom
     doc.setDrawColor(241, 245, 249);
     doc.line(margin, y + rowHeight, margin + contentWidth, y + rowHeight);
 
-    // Row text
     doc.setTextColor(51, 65, 85);
-    doc.text(String(index + 1), colX.sno + 4, y + 5.5);
-    doc.text(descLines, colX.desc + 2, y + 5.5);
-    doc.text(String(itemQty), colX.qty + 10, y + 5.5, { align: 'center' });
-    doc.text(itemPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.unitPrice + 19, y + 5.5, { align: 'right' });
+    doc.text(String(index + 1), colX.sno + 4, y + 5.2);
+    doc.text(descLines, colX.desc + 2, y + 5.2);
+    doc.text(String(itemQty), colX.qty + 10, y + 5.2, { align: 'center' });
+    doc.text(itemPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.unitPrice + 19, y + 5.2, { align: 'right' });
     
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.total + 20, y + 5.5, { align: 'right' });
+    doc.text(itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), colX.total + 20, y + 5.2, { align: 'right' });
     doc.setFont('helvetica', 'normal');
 
     y += rowHeight;
   });
 
-  // Table bottom border
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
@@ -526,7 +538,6 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   const discount = Number(invoice.discount) || 0;
   const finalAmount = Math.max(0, subtotal - discount);
 
-  // Summary Calculation Block (Right Aligned)
   const summaryWidth = 80;
   const summaryX = pageWidth - margin - summaryWidth;
 
@@ -571,48 +582,63 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
 
   y += 6;
 
-  // Payment Mode & Transaction Reference info
-  if (invoice.paymentMode || invoice.transactionRef) {
+  // Payment Mode & Transaction Reference info & PO Ref
+  const payInfoParts = [];
+  if (invoice.paymentMode) payInfoParts.push(`Mode: ${invoice.paymentMode}`);
+  if (invoice.transactionRef) payInfoParts.push(`Ref / Txn ID: ${invoice.transactionRef}`);
+  if (invoice.poNumber) payInfoParts.push(`PO / Ref: ${invoice.poNumber}`);
+
+  if (payInfoParts.length > 0) {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8.2);
     doc.setTextColor(71, 85, 105);
-    doc.text('Payment Reference:', margin, y);
+    doc.text('Payment Info:', margin, y);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(15, 23, 42);
-    const payInfo = [invoice.paymentMode, invoice.transactionRef ? `Ref / Txn ID: ${invoice.transactionRef}` : ''].filter(Boolean).join(' | ');
-    doc.text(payInfo, margin + 30, y);
-    y += 6;
+    doc.text(payInfoParts.join(' | '), margin + 24, y);
+    y += 5.5;
   }
 
   // 6. Notes & Terms & Bank Details
   doc.setDrawColor(226, 232, 240);
   doc.line(margin, y, pageWidth - margin, y);
 
-  y += 6;
+  y += 5;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(37, 99, 235);
-  doc.text('TERMS & PAYMENT REMITTANCE:', margin, y);
+  doc.text('BANK REMITTANCE & PAYMENT DETAILS:', margin, y);
 
-  y += 5;
+  y += 4.5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Bank Name: ${bankName} | Account Name: ${accountName} | A/C No: ${accountNumber} | IFSC: ${ifscCode} | UPI ID: ${upiId}`, margin, y);
+
+  y += 5.5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text('TERMS & NOTES:', margin, y);
+
+  y += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.8);
   doc.setTextColor(100, 116, 139);
   const notesText = invoice.notes || 
     '1. Commercial bill without GST/tax calculations. Payment is non-refundable upon component fabrication.\n' +
-    '2. Bank: GG TECHCORE Engineering Solutions | UPI ID: ggbank360@okaxis\n' +
-    '3. For electronic transfers, please share the UTR reference number to ggbank360@gmail.com.';
+    '2. For electronic transfers, please share the UTR reference number to ggbank360@gmail.com.';
 
   const noteLines = doc.splitTextToSize(notesText, contentWidth - 50);
   doc.text(noteLines, margin, y);
 
   // Signatory
   const signX = pageWidth - margin - 45;
-  const signY = y + 8;
+  const signY = y + 7;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text('For GG TECHCORE', signX, signY);
+  doc.text(`For ${companyName}`, signX, signY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
@@ -624,10 +650,9 @@ export const generateBillingPDF = (invoice, autoDownload = true) => {
   doc.rect(0, pageHeight - 4, pageWidth, 4, 'F');
 
   if (autoDownload) {
-    const filename = `GGTECHCORE_Invoice_${invoice.invoiceNumber || 'INV'}.pdf`;
+    const filename = `${companyName.replace(/[^a-zA-Z0-9]/g, '_')}_Invoice_${invoice.invoiceNumber || 'INV'}.pdf`;
     doc.save(filename);
   }
 
   return doc;
 };
-

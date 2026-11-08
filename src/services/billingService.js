@@ -17,6 +17,41 @@ import {
 
 const LOCAL_STORAGE_QUOTATIONS_KEY = 'gg_techcore_quotations_v1';
 const LOCAL_STORAGE_INVOICES_KEY = 'gg_techcore_invoices_v1';
+const LOCAL_STORAGE_COMPANY_KEY = 'gg_techcore_company_profile_v1';
+
+export const DEFAULT_COMPANY_PROFILE = {
+  companyName: "GG TECHCORE",
+  tagline: "ENGINEERING IDEAS INTO REALITY",
+  address: "TechCore Engineering Park, Electronics Innovation Hub, Coimbatore, Tamil Nadu - 641014, India",
+  phone: "+91 77089 49507",
+  altPhone: "+91 63744 31113",
+  email: "ggbank360@gmail.com",
+  website: "www.ggtechcore.com",
+  bankName: "HDFC Bank",
+  accountName: "GG TECHCORE",
+  accountNumber: "50200084920192",
+  ifscCode: "HDFC0001234",
+  upiId: "ggbank360@okaxis"
+};
+
+export const getCompanyProfile = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY);
+    if (!raw) return DEFAULT_COMPANY_PROFILE;
+    return { ...DEFAULT_COMPANY_PROFILE, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_COMPANY_PROFILE;
+  }
+};
+
+export const saveCompanyProfile = (profile) => {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(profile));
+    window.dispatchEvent(new CustomEvent('gg_company_updated', { detail: profile }));
+  } catch (err) {
+    console.error('Failed to save company profile:', err);
+  }
+};
 
 // Initial sample quotations for immediate demo
 const sampleQuotations = [

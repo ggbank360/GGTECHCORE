@@ -4,7 +4,6 @@ import {
   Receipt, 
   Plus, 
   Trash2, 
-  Printer, 
   Download, 
   Eye, 
   RefreshCw, 
@@ -14,7 +13,11 @@ import {
   CheckCircle, 
   Clock, 
   RotateCcw,
-  User
+  User,
+  Building,
+  MapPin,
+  CreditCard,
+  X
 } from 'lucide-react';
 import { 
   createQuotation, 
@@ -25,7 +28,9 @@ import {
   updateInvoice, 
   deleteInvoice, 
   subscribeToInvoices,
-  getNextInvoiceNumber 
+  getNextInvoiceNumber,
+  getCompanyProfile,
+  saveCompanyProfile
 } from '../services/billingService';
 import { generateQuotationPDF, generateBillingPDF } from '../utils/pdfGenerator';
 import { A4DocumentPreview } from './A4DocumentPreview';
@@ -39,6 +44,11 @@ export const BillingModule = () => {
   const [quotationSubView, setQuotationSubView] = useState('create');
   const [billingSubView, setBillingSubView] = useState('create');
 
+  // Company Profile Settings Modal State
+  const [companyProfile, setCompanyProfile] = useState(() => getCompanyProfile());
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [companyDraft, setCompanyDraft] = useState(() => getCompanyProfile());
+
   // Data lists
   const [quotations, setQuotations] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -50,7 +60,7 @@ export const BillingModule = () => {
   const [billingStatusFilter, setBillingStatusFilter] = useState('ALL');
 
   // Document Preview Modal State
-  const [previewDoc, setPreviewDoc] = useState(null); // { type: 'quotation' | 'billing', data: {...} }
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   // Action Notification Banner
   const [bannerMessage, setBannerMessage] = useState('');
@@ -67,6 +77,7 @@ export const BillingModule = () => {
     const validDate = new Date();
     validDate.setDate(validDate.getDate() + 30);
     const validUntil = validDate.toISOString().split('T')[0];
+    const comp = getCompanyProfile();
 
     return {
       quotationNumber: getNextQuotationNumber(quotations),
@@ -78,6 +89,9 @@ export const BillingModule = () => {
       email: '',
       phone: '',
       address: '',
+      companyAddress: comp.address,
+      companyPhone: comp.phone,
+      companyEmail: comp.email,
       items: [
         { id: 'item_' + Date.now(), description: '', quantity: 1, unitPrice: 0, total: 0 }
       ],
@@ -95,6 +109,7 @@ export const BillingModule = () => {
     const dueDateObj = new Date();
     dueDateObj.setDate(dueDateObj.getDate() + 14);
     const dueDate = dueDateObj.toISOString().split('T')[0];
+    const comp = getCompanyProfile();
 
     return {
       invoiceNumber: getNextInvoiceNumber(invoices),
@@ -103,22 +118,31 @@ export const BillingModule = () => {
       paymentStatus: 'Pending',
       paymentMode: 'Bank Transfer / NEFT',
       transactionRef: '',
+      poNumber: '',
       customerName: '',
       companyName: '',
       email: '',
       phone: '',
       address: '',
+      companyAddress: comp.address,
+      companyPhone: comp.phone,
+      companyEmail: comp.email,
+      bankName: comp.bankName,
+      accountName: comp.accountName,
+      accountNumber: comp.accountNumber,
+      ifscCode: comp.ifscCode,
+      upiId: comp.upiId,
       discount: 0,
       items: [
         { id: 'item_' + Date.now(), description: '', quantity: 1, unitPrice: 0, total: 0 }
       ],
-      notes: '1. Commercial bill without GST/tax calculations.\n2. Bank: GG TECHCORE Engineering Solutions | UPI ID: ggbank360@okaxis\n3. For electronic transfers, please share the transaction reference.'
+      notes: '1. Commercial bill without GST/tax calculations. Payment non-refundable on component fabrication.\n2. Bank remittance details listed above. Please share transaction UTR to ggbank360@gmail.com.'
     };
   };
 
   const [billingForm, setBillingForm] = useState(getInitialBillingForm);
 
-  // Subscribe to real-time data
+  // Subscribe to real-time data & company updates
   useEffect(() => {
     const unsubQuotations = subscribeToQuotations((list) => {
       setQuotations(list);
@@ -140,11 +164,42 @@ export const BillingModule = () => {
       });
     });
 
+    const handleCompanyUpdate = (e) => {
+      if (e.detail) {
+        setCompanyProfile(e.detail);
+        setCompanyDraft(e.detail);
+      }
+    };
+    window.addEventListener('gg_company_updated', handleCompanyUpdate);
+
     return () => {
       unsubQuotations();
       unsubInvoices();
+      window.removeEventListener('gg_company_updated', handleCompanyUpdate);
     };
   }, []);
+
+  // Save Company Details
+  const handleSaveCompanyDetails = (e) => {
+    e.preventDefault();
+    saveCompanyProfile(companyDraft);
+    setCompanyProfile(companyDraft);
+    // Update active forms with new address if desired
+    setQuotationForm(prev => ({ ...prev, companyAddress: companyDraft.address, companyPhone: companyDraft.phone, companyEmail: companyDraft.email }));
+    setBillingForm(prev => ({ 
+      ...prev, 
+      companyAddress: companyDraft.address, 
+      companyPhone: companyDraft.phone, 
+      companyEmail: companyDraft.email,
+      bankName: companyDraft.bankName,
+      accountName: companyDraft.accountName,
+      accountNumber: companyDraft.accountNumber,
+      ifscCode: companyDraft.ifscCode,
+      upiId: companyDraft.upiId
+    }));
+    setIsCompanyModalOpen(false);
+    showBanner('✅ Company address and remittance details updated successfully!');
+  };
 
   // -------------------------------------------------------------
   // QUOTATION ITEM OPERATIONS & CALCULATIONS
@@ -190,12 +245,10 @@ export const BillingModule = () => {
     });
   };
 
-  // Calculate quotation total
   const quotationCalculatedTotal = (quotationForm.items || []).reduce((sum, it) => {
     return sum + ((Number(it.quantity) || 1) * (Number(it.unitPrice) || 0));
   }, 0);
 
-  // Save Quotation
   const handleSaveQuotation = async (e) => {
     if (e) e.preventDefault();
     if (!quotationForm.customerName.trim()) {
@@ -210,6 +263,9 @@ export const BillingModule = () => {
 
     const payload = {
       ...quotationForm,
+      companyAddress: quotationForm.companyAddress || companyProfile.address,
+      companyPhone: quotationForm.companyPhone || companyProfile.phone,
+      companyEmail: quotationForm.companyEmail || companyProfile.email,
       totalAmount: quotationCalculatedTotal,
       items: quotationForm.items.map(it => ({
         ...it,
@@ -220,7 +276,6 @@ export const BillingModule = () => {
     try {
       await createQuotation(payload);
       showBanner(`✅ Quotation ${payload.quotationNumber} saved successfully to database!`);
-      // Reset form with new number
       const fresh = getInitialQuotationForm();
       fresh.quotationNumber = getNextQuotationNumber([...quotations, payload]);
       setQuotationForm(fresh);
@@ -274,14 +329,13 @@ export const BillingModule = () => {
     });
   };
 
-  // Calculate billing totals (No GST or taxes)
+  // Subtotal, Discount & Final Amount
   const billingSubtotal = (billingForm.items || []).reduce((sum, it) => {
     return sum + ((Number(it.quantity) || 1) * (Number(it.unitPrice) || 0));
   }, 0);
   const billingDiscount = Math.max(0, parseFloat(billingForm.discount) || 0);
   const billingFinalAmount = Math.max(0, billingSubtotal - billingDiscount);
 
-  // Save Final Bill
   const handleSaveInvoice = async (e) => {
     if (e) e.preventDefault();
     if (!billingForm.customerName.trim()) {
@@ -296,6 +350,14 @@ export const BillingModule = () => {
 
     const payload = {
       ...billingForm,
+      companyAddress: billingForm.companyAddress || companyProfile.address,
+      companyPhone: billingForm.companyPhone || companyProfile.phone,
+      companyEmail: billingForm.companyEmail || companyProfile.email,
+      bankName: billingForm.bankName || companyProfile.bankName,
+      accountName: billingForm.accountName || companyProfile.accountName,
+      accountNumber: billingForm.accountNumber || companyProfile.accountNumber,
+      ifscCode: billingForm.ifscCode || companyProfile.ifscCode,
+      upiId: billingForm.upiId || companyProfile.upiId,
       subtotal: billingSubtotal,
       discount: billingDiscount,
       finalAmount: billingFinalAmount,
@@ -317,14 +379,12 @@ export const BillingModule = () => {
     }
   };
 
-  // Toggle invoice payment status
   const handleToggleInvoiceStatus = async (inv) => {
     const nextStatus = inv.paymentStatus === 'Paid' ? 'Pending' : 'Paid';
     await updateInvoice(inv.id, { paymentStatus: nextStatus });
     showBanner(`Invoice ${inv.invoiceNumber} marked as ${nextStatus}.`);
   };
 
-  // Delete handlers
   const handleDeleteQuotation = async (id, num) => {
     if (window.confirm(`Are you sure you want to delete Quotation ${num}?`)) {
       await deleteQuotation(id);
@@ -356,7 +416,6 @@ export const BillingModule = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate high-level stats
   const totalQuotationValue = quotations.reduce((sum, q) => sum + (Number(q.totalAmount) || 0), 0);
   const totalBilledValue = invoices.reduce((sum, inv) => sum + (Number(inv.finalAmount) || 0), 0);
   const paidBilledValue = invoices
@@ -392,17 +451,56 @@ export const BillingModule = () => {
       {/* ========================================================================= */}
       {currentSection === 'cards' && (
         <div>
-          {/* Section Header */}
-          <div style={{ marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0284c7', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.35rem' }}>
-              <span>GG TECHCORE Admin Hub</span> &bull; <span>Financial Management</span>
+          {/* Section Header with Company Address Config Button */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            marginBottom: '2rem',
+            flexWrap: 'wrap',
+            gap: '1.25rem'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0284c7', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.35rem' }}>
+                <span>GG TECHCORE Admin Hub</span> &bull; <span>Financial Management</span>
+              </div>
+              <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.02em', marginBottom: '0.4rem' }}>
+                Billing & Commercial Operations
+              </h2>
+              <p style={{ color: '#64748b', fontSize: '0.96rem', maxWidth: '750px', lineHeight: 1.5 }}>
+                Generate independent engineering quotations and final commercial bills with automated real-time calculations, clean A4 PDF export, and database synchronization.
+              </p>
+              
+              {/* Active Company Address Pill */}
+              <div style={{
+                marginTop: '0.75rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: '#f1f5f9',
+                padding: '0.35rem 0.85rem',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0',
+                fontSize: '0.82rem',
+                color: '#334155'
+              }}>
+                <MapPin size={14} color="#0284c7" />
+                <span><strong>Company Address:</strong> {companyProfile.address}</span>
+              </div>
             </div>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.02em', marginBottom: '0.4rem' }}>
-              Billing & Commercial Operations
-            </h2>
-            <p style={{ color: '#64748b', fontSize: '0.96rem', maxWidth: '750px', lineHeight: 1.5 }}>
-              Generate independent engineering quotations and final commercial bills with automated real-time calculations, clean A4 PDF export, and database synchronization.
-            </p>
+
+            {/* Configure Company Address Button */}
+            <button
+              onClick={() => {
+                setCompanyDraft(getCompanyProfile());
+                setIsCompanyModalOpen(true);
+              }}
+              className="btn btn-secondary btn-sm"
+              style={{ background: '#ffffff', color: '#0284c7', borderColor: '#bae6fd', padding: '0.6rem 1rem' }}
+            >
+              <Building size={16} />
+              <span>Edit Company Address & Bank Details</span>
+            </button>
           </div>
 
           {/* TWO MAIN CARDS GRID */}
@@ -429,7 +527,6 @@ export const BillingModule = () => {
               }}
             >
               <div>
-                {/* Header with Icon */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                   <div style={{
                     width: '56px',
@@ -466,7 +563,6 @@ export const BillingModule = () => {
                   Create detailed hardware engineering cost proposals and service estimates. Add unlimited items with dynamic line-item recalculation, generate unique quote numbers, and export professional A4 PDFs.
                 </p>
 
-                {/* Key Metrics / Snapshot */}
                 <div style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
@@ -496,7 +592,6 @@ export const BillingModule = () => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <button
                   onClick={() => {
@@ -540,7 +635,6 @@ export const BillingModule = () => {
               }}
             >
               <div>
-                {/* Header with Icon */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                   <div style={{
                     width: '56px',
@@ -577,7 +671,6 @@ export const BillingModule = () => {
                   Generate final tax-free commercial invoices and payment receipts. Add unlimited products/services, apply flat discounts, track payment status (Paid/Pending), and download branded A4 bills.
                 </p>
 
-                {/* Key Metrics / Snapshot */}
                 <div style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
@@ -610,7 +703,6 @@ export const BillingModule = () => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <button
                   onClick={() => {
@@ -647,7 +739,7 @@ export const BillingModule = () => {
       {/* ========================================================================= */}
       {currentSection === 'quotation' && (
         <div>
-          {/* Top Navigation & Breadcrumbs */}
+          {/* Top Navigation */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -679,7 +771,6 @@ export const BillingModule = () => {
               </div>
             </div>
 
-            {/* Sub-view toggles */}
             <div style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
               <button
                 onClick={() => setQuotationSubView('create')}
@@ -807,6 +898,38 @@ export const BillingModule = () => {
                   </div>
                 </div>
 
+                {/* Editable Company Address Section on the Quotation */}
+                <div style={{
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '10px',
+                  padding: '1rem 1.25rem',
+                  marginBottom: '1.75rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Building size={16} />
+                      <span>Company Address (Printed in Document Header)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQuotationForm(prev => ({ ...prev, companyAddress: companyProfile.address }))}
+                      style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Reset to Default Address
+                    </button>
+                  </div>
+
+                  <input 
+                    type="text"
+                    value={quotationForm.companyAddress}
+                    onChange={(e) => setQuotationForm({ ...quotationForm, companyAddress: e.target.value })}
+                    className="form-input"
+                    placeholder="Company laboratory/office address..."
+                    style={{ background: '#ffffff', fontSize: '0.9rem' }}
+                  />
+                </div>
+
                 {/* Customer Details Block */}
                 <div style={{ marginBottom: '1.75rem' }}>
                   <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -883,7 +1006,6 @@ export const BillingModule = () => {
                       <span>Product / Service Line Items ({quotationForm.items.length})</span>
                     </h4>
 
-                    {/* Dynamic + Add Item button */}
                     <button
                       type="button"
                       onClick={handleAddQuotationItem}
@@ -1018,7 +1140,6 @@ export const BillingModule = () => {
                     />
                   </div>
 
-                  {/* Financial Summary (Strictly NO GST or TAX) */}
                   <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div style={{
                       background: '#ffffff',
@@ -1062,6 +1183,9 @@ export const BillingModule = () => {
                       onClick={() => {
                         const payload = {
                           ...quotationForm,
+                          companyAddress: quotationForm.companyAddress || companyProfile.address,
+                          companyPhone: quotationForm.companyPhone || companyProfile.phone,
+                          companyEmail: quotationForm.companyEmail || companyProfile.email,
                           totalAmount: quotationCalculatedTotal,
                           items: quotationForm.items.map(it => ({
                             ...it,
@@ -1076,33 +1200,15 @@ export const BillingModule = () => {
                       <span>Preview A4</span>
                     </button>
 
-                    {/* Quick Print Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const payload = {
-                          ...quotationForm,
-                          totalAmount: quotationCalculatedTotal,
-                          items: quotationForm.items.map(it => ({
-                            ...it,
-                            total: (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0)
-                          }))
-                        };
-                        setPreviewDoc({ type: 'quotation', data: payload });
-                        setTimeout(() => window.print(), 350);
-                      }}
-                      className="btn btn-secondary"
-                    >
-                      <Printer size={16} />
-                      <span>Print Quotation</span>
-                    </button>
-
                     {/* Quick Download PDF Button */}
                     <button
                       type="button"
                       onClick={() => {
                         const payload = {
                           ...quotationForm,
+                          companyAddress: quotationForm.companyAddress || companyProfile.address,
+                          companyPhone: quotationForm.companyPhone || companyProfile.phone,
+                          companyEmail: quotationForm.companyEmail || companyProfile.email,
                           totalAmount: quotationCalculatedTotal,
                           items: quotationForm.items.map(it => ({
                             ...it,
@@ -1136,7 +1242,6 @@ export const BillingModule = () => {
           {quotationSubView === 'history' && (
             <div className="tech-card" style={{ background: '#ffffff', padding: '1.75rem', borderRadius: '14px' }}>
               
-              {/* Filter & Search Bar */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1181,7 +1286,6 @@ export const BillingModule = () => {
                 </button>
               </div>
 
-              {/* History Table */}
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                   <thead>
@@ -1243,17 +1347,6 @@ export const BillingModule = () => {
                               <Eye size={14} />
                             </button>
                             <button
-                              onClick={() => {
-                                setPreviewDoc({ type: 'quotation', data: q });
-                                setTimeout(() => window.print(), 350);
-                              }}
-                              className="btn btn-secondary btn-sm"
-                              style={{ padding: '0.3rem 0.55rem' }}
-                              title="Print A4 Quotation"
-                            >
-                              <Printer size={14} />
-                            </button>
-                            <button
                               onClick={() => generateQuotationPDF(q, true)}
                               className="btn btn-secondary btn-sm"
                               style={{ padding: '0.3rem 0.55rem' }}
@@ -1301,7 +1394,7 @@ export const BillingModule = () => {
       {/* ========================================================================= */}
       {currentSection === 'billing' && (
         <div>
-          {/* Top Navigation & Breadcrumbs */}
+          {/* Top Navigation */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -1333,7 +1426,6 @@ export const BillingModule = () => {
               </div>
             </div>
 
-            {/* Sub-view toggles */}
             <div style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
               <button
                 onClick={() => setBillingSubView('create')}
@@ -1433,7 +1525,7 @@ export const BillingModule = () => {
 
                   <div>
                     <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>
-                      Due Date
+                      Payment Due Date
                     </label>
                     <input 
                       type="date"
@@ -1462,6 +1554,38 @@ export const BillingModule = () => {
                       <option value="Partial">Partial</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Editable Company Address Section on the Bill */}
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '10px',
+                  padding: '1rem 1.25rem',
+                  marginBottom: '1.75rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Building size={16} />
+                      <span>Company Address (Printed in Bill Header)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBillingForm(prev => ({ ...prev, companyAddress: companyProfile.address }))}
+                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Reset to Default Address
+                    </button>
+                  </div>
+
+                  <input 
+                    type="text"
+                    value={billingForm.companyAddress}
+                    onChange={(e) => setBillingForm({ ...billingForm, companyAddress: e.target.value })}
+                    className="form-input"
+                    placeholder="Enter your official laboratory / company address..."
+                    style={{ background: '#ffffff', fontSize: '0.9rem' }}
+                  />
                 </div>
 
                 {/* Customer Details Block */}
@@ -1531,8 +1655,8 @@ export const BillingModule = () => {
                     </div>
                   </div>
 
-                  {/* Payment Mode & Reference */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '1rem', marginTop: '1rem' }} className="grid-cols-2">
+                  {/* Payment Mode, Reference & PO Number */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: '1rem', marginTop: '1rem' }} className="grid-cols-2">
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label">Payment Mode</label>
                       <select
@@ -1558,6 +1682,17 @@ export const BillingModule = () => {
                         className="form-input"
                       />
                     </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">PO / Work Order Ref (Optional)</label>
+                      <input 
+                        type="text"
+                        placeholder="e.g. PO-2026-99"
+                        value={billingForm.poNumber}
+                        onChange={(e) => setBillingForm({ ...billingForm, poNumber: e.target.value })}
+                        className="form-input"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1569,7 +1704,6 @@ export const BillingModule = () => {
                       <span>Billed Products & Services ({billingForm.items.length})</span>
                     </h4>
 
-                    {/* Dynamic + Add Item button */}
                     <button
                       type="button"
                       onClick={handleAddBillingItem}
@@ -1581,13 +1715,12 @@ export const BillingModule = () => {
                     </button>
                   </div>
 
-                  {/* Items Table */}
                   <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase' }}>
                           <th style={{ padding: '0.75rem', width: '40px', textAlign: 'center' }}>#</th>
-                          <th style={{ padding: '0.75rem' }}>Product / Service Details</th>
+                          <th style={{ padding: '0.75rem' }}>Product / Service Details & Technical Specs</th>
                           <th style={{ padding: '0.75rem', width: '90px', textAlign: 'center' }}>Qty</th>
                           <th style={{ padding: '0.75rem', width: '130px', textAlign: 'right' }}>Price (₹)</th>
                           <th style={{ padding: '0.75rem', width: '140px', textAlign: 'right' }}>Total (₹)</th>
@@ -1679,6 +1812,73 @@ export const BillingModule = () => {
                   </div>
                 </div>
 
+                {/* Bank Remittance Details Block on the Bill */}
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '10px',
+                  padding: '1.25rem',
+                  marginBottom: '1.75rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: '#166534', fontWeight: 800, fontSize: '0.86rem', textTransform: 'uppercase' }}>
+                    <CreditCard size={16} />
+                    <span>Bank Remittance & Payment Details (Printed on Bill)</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.76rem' }}>Bank Name</label>
+                      <input 
+                        type="text"
+                        value={billingForm.bankName}
+                        onChange={(e) => setBillingForm({ ...billingForm, bankName: e.target.value })}
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.76rem' }}>Account Name</label>
+                      <input 
+                        type="text"
+                        value={billingForm.accountName}
+                        onChange={(e) => setBillingForm({ ...billingForm, accountName: e.target.value })}
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.76rem' }}>Account Number</label>
+                      <input 
+                        type="text"
+                        value={billingForm.accountNumber}
+                        onChange={(e) => setBillingForm({ ...billingForm, accountNumber: e.target.value })}
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.76rem' }}>IFSC Code</label>
+                      <input 
+                        type="text"
+                        value={billingForm.ifscCode}
+                        onChange={(e) => setBillingForm({ ...billingForm, ifscCode: e.target.value })}
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.76rem' }}>UPI ID (GPay / PhonePe)</label>
+                      <input 
+                        type="text"
+                        value={billingForm.upiId}
+                        onChange={(e) => setBillingForm({ ...billingForm, upiId: e.target.value })}
+                        className="form-input"
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Calculation, Discount & Terms Section (Strictly NO GST or TAX) */}
                 <div style={{
                   display: 'grid',
@@ -1704,7 +1904,6 @@ export const BillingModule = () => {
                     />
                   </div>
 
-                  {/* Automatic Calculations: Subtotal, Discount & Final Amount */}
                   <div>
                     <div style={{
                       background: '#ffffff',
@@ -1774,6 +1973,14 @@ export const BillingModule = () => {
                       onClick={() => {
                         const payload = {
                           ...billingForm,
+                          companyAddress: billingForm.companyAddress || companyProfile.address,
+                          companyPhone: billingForm.companyPhone || companyProfile.phone,
+                          companyEmail: billingForm.companyEmail || companyProfile.email,
+                          bankName: billingForm.bankName || companyProfile.bankName,
+                          accountName: billingForm.accountName || companyProfile.accountName,
+                          accountNumber: billingForm.accountNumber || companyProfile.accountNumber,
+                          ifscCode: billingForm.ifscCode || companyProfile.ifscCode,
+                          upiId: billingForm.upiId || companyProfile.upiId,
                           subtotal: billingSubtotal,
                           discount: billingDiscount,
                           finalAmount: billingFinalAmount,
@@ -1790,35 +1997,20 @@ export const BillingModule = () => {
                       <span>Preview A4</span>
                     </button>
 
-                    {/* Quick Print Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const payload = {
-                          ...billingForm,
-                          subtotal: billingSubtotal,
-                          discount: billingDiscount,
-                          finalAmount: billingFinalAmount,
-                          items: billingForm.items.map(it => ({
-                            ...it,
-                            total: (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0)
-                          }))
-                        };
-                        setPreviewDoc({ type: 'billing', data: payload });
-                        setTimeout(() => window.print(), 350);
-                      }}
-                      className="btn btn-secondary"
-                    >
-                      <Printer size={16} />
-                      <span>Print Final Bill</span>
-                    </button>
-
                     {/* Quick Download PDF Button */}
                     <button
                       type="button"
                       onClick={() => {
                         const payload = {
                           ...billingForm,
+                          companyAddress: billingForm.companyAddress || companyProfile.address,
+                          companyPhone: billingForm.companyPhone || companyProfile.phone,
+                          companyEmail: billingForm.companyEmail || companyProfile.email,
+                          bankName: billingForm.bankName || companyProfile.bankName,
+                          accountName: billingForm.accountName || companyProfile.accountName,
+                          accountNumber: billingForm.accountNumber || companyProfile.accountNumber,
+                          ifscCode: billingForm.ifscCode || companyProfile.ifscCode,
+                          upiId: billingForm.upiId || companyProfile.upiId,
                           subtotal: billingSubtotal,
                           discount: billingDiscount,
                           finalAmount: billingFinalAmount,
@@ -1855,7 +2047,6 @@ export const BillingModule = () => {
           {billingSubView === 'history' && (
             <div className="tech-card" style={{ background: '#ffffff', padding: '1.75rem', borderRadius: '14px' }}>
               
-              {/* Filter & Search Bar */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1900,7 +2091,6 @@ export const BillingModule = () => {
                 </button>
               </div>
 
-              {/* History Table */}
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                   <thead>
@@ -1977,17 +2167,6 @@ export const BillingModule = () => {
                                 <Eye size={14} />
                               </button>
                               <button
-                                onClick={() => {
-                                  setPreviewDoc({ type: 'billing', data: inv });
-                                  setTimeout(() => window.print(), 350);
-                                }}
-                                className="btn btn-secondary btn-sm"
-                                style={{ padding: '0.3rem 0.55rem' }}
-                                title="Print A4 Bill"
-                              >
-                                <Printer size={14} />
-                              </button>
-                              <button
                                 onClick={() => generateBillingPDF(inv, true)}
                                 className="btn btn-secondary btn-sm"
                                 style={{ padding: '0.3rem 0.55rem' }}
@@ -2028,6 +2207,175 @@ export const BillingModule = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* COMPANY ADDRESS & DETAILS CONFIG MODAL                                    */}
+      {/* ========================================================================= */}
+      {isCompanyModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsCompanyModalOpen(false)} style={{ zIndex: 10000 }}>
+          <div 
+            className="modal-content" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '640px', padding: '0', overflow: 'hidden' }}
+          >
+            <div style={{
+              padding: '1.25rem 1.75rem',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#f8fafc'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Building size={20} color="#0284c7" />
+                <h3 style={{ fontSize: '1.2rem', color: '#0f172a', margin: 0 }}>
+                  Configure Company Address & Profile
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsCompanyModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCompanyDetails} style={{ padding: '1.75rem' }}>
+              <div className="form-group">
+                <label className="form-label required">Company / Lab Name</label>
+                <input 
+                  type="text"
+                  required
+                  value={companyDraft.companyName}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, companyName: e.target.value })}
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Brand Tagline</label>
+                <input 
+                  type="text"
+                  value={companyDraft.tagline}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, tagline: e.target.value })}
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label required">Official Company Address (Appears on Bills & Quotes)</label>
+                <textarea 
+                  rows={3}
+                  required
+                  value={companyDraft.address}
+                  onChange={(e) => setCompanyDraft({ ...companyDraft, address: e.target.value })}
+                  className="form-textarea"
+                  placeholder="Street, Technology Park, City, State, PIN, Country"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }} className="grid-cols-2">
+                <div className="form-group">
+                  <label className="form-label">Official Phone</label>
+                  <input 
+                    type="text"
+                    value={companyDraft.phone}
+                    onChange={(e) => setCompanyDraft({ ...companyDraft, phone: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Official Email</label>
+                  <input 
+                    type="email"
+                    value={companyDraft.email}
+                    onChange={(e) => setCompanyDraft({ ...companyDraft, email: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginTop: '1rem' }}>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem' }}>
+                  Default Bank Remittance Details
+                </h4>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }} className="grid-cols-2">
+                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>Bank Name</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.bankName}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, bankName: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>Account Name</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.accountName}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, accountName: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>Account Number</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.accountNumber}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, accountNumber: e.target.value })}
+                      className="form-input"
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>IFSC Code</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.ifscCode}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, ifscCode: e.target.value })}
+                      className="form-input"
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ gridColumn: 'span 2', marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem' }}>UPI ID</label>
+                    <input 
+                      type="text"
+                      value={companyDraft.upiId}
+                      onChange={(e) => setCompanyDraft({ ...companyDraft, upiId: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(false)}
+                  className="btn btn-outline"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                >
+                  <Save size={16} />
+                  <span>Save Address & Settings</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
